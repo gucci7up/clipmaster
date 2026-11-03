@@ -175,3 +175,37 @@ describe('detección de video por firma de archivo', () => {
     expect(await looksLikeVideo(fake)).toBe(false);
   });
 });
+
+describe('editor: fuentes, estilos y palabras', () => {
+  const { fontExtension, fontFamily } = jest.requireActual('../src/clips/font-file') as typeof import('../src/clips/font-file');
+  const { buildOverride, effectiveWords } = jest.requireActual('../src/clips/words') as typeof import('../src/clips/words');
+  const { readFileSync, existsSync } = jest.requireActual('node:fs') as typeof import('node:fs');
+
+  it('lee el nombre de familia de una fuente TrueType real y rechaza otros archivos', () => {
+    const candidates = ['C:\Windows\Fonts\arial.ttf', '/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf'];
+    const path = candidates.find((p) => existsSync(p));
+    if (path) {
+      const buf = readFileSync(path);
+      expect(fontExtension(buf)).toBe('ttf');
+      expect(fontFamily(buf)).toMatch(/^(Arial|DejaVu Sans)$/);
+    }
+    expect(fontExtension(Buffer.from('<html>no soy una fuente</html>'))).toBeNull();
+    expect(fontFamily(Buffer.alloc(4))).toBeNull();
+  });
+
+  it('acepta plantillas y fuentes conocidas o propias, y descarta el resto', () => {
+    expect(sanitizeStyle({ preset: 'neon', font: 'Bebas Neue' })).toEqual({ preset: 'neon', font: 'Bebas Neue' });
+    expect(sanitizeStyle({ font: 'custom:11111111-2222-3333-4444-555555555555' }).font).toBe('custom:11111111-2222-3333-4444-555555555555');
+    expect(sanitizeStyle({ preset: 'otra' as never, font: 'Comic Sans; drop' })).toEqual({});
+  });
+
+  it('la corrección sustituye el texto en su tramo y respeta los tiempos', () => {
+    const original = [{ start: 1, end: 1.5, word: 'ola' }, { start: 1.5, end: 2, word: 'mundo' }];
+    const ranges = [{ start: 0, end: 5 }];
+    const ov = buildOverride(original, [{ start: 1, end: 1.5, word: ' hola ' }, { start: 1.5, end: 2, word: '' }], ranges);
+    expect(ov.words).toEqual([{ start: 1, end: 1.5, word: 'hola' }]);
+    const transcript = [...original, { start: 9, end: 9.5, word: 'fuera' }];
+    expect(effectiveWords(transcript, ov, [{ start: 0, end: 10 }]).map((w) => w.word)).toEqual(['hola', 'fuera']);
+    expect(() => buildOverride(original, [{ start: 1.2, end: 1.5, word: 'x' }], ranges)).toThrow();
+  });
+});

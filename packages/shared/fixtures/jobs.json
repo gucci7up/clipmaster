@@ -49,9 +49,12 @@
     "aspect": "VERTICAL",
     "subtitles": {
       "enabled": true,
-      "style": { "preset": "tiktok", "fontSize": 72, "primaryColor": "#FFFFFF", "highlightColor": "#FFD400", "outlineColor": "#000000", "outlineWidth": 5, "position": "center", "uppercase": true, "maxWordsPerLine": 4 },
+      "style": { "preset": "tiktok", "font": "Montserrat", "fontSize": 72, "primaryColor": "#FFFFFF", "highlightColor": "#FFD400", "outlineColor": "#000000", "outlineWidth": 5, "position": "center", "uppercase": true, "maxWordsPerLine": 4 },
       "words": [{ "start": 10.2, "end": 10.6, "word": "Hola", "probability": 0.98 }]
     },
+    "hook": { "text": "El momento que nadie esperaba", "durationSec": 3 },
+    "fonts": [],
+    "segments": null,
     "reframe": { "mode": "auto" },
     "track": [{ "t": 0, "x": 0.5, "y": 0.4 }],
     "outputPrefix": "clips/a3c1/0b9a"

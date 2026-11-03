@@ -125,6 +125,8 @@ model User {
   assets     StorageAsset[]
   auditLogs  AuditLog[]
   captureAgents CaptureAgent[]
+  subtitlePresets SubtitlePreset[]
+  fonts         UserFont[]
 }
 
 model Session {
@@ -341,6 +343,13 @@ model Clip {
   reframeMode   String      @default("auto")
   manualX       Float?
   manualY       Float?
+  /// Palabras corregidas por el usuario: { start, end, words[] } sobre la línea de tiempo del proyecto.
+  wordOverride  Json?
+  hookEnabled   Boolean     @default(false)
+  hookText      String?
+  hookDuration  Float       @default(3)
+  /// Clip combinado: tramos [{ start, end }] que se encadenan en orden.
+  segments      Json?
   status        ClipStatus  @default(PENDING)
   currentRenderId String?   @db.Uuid
   deletedAt     DateTime?
@@ -411,6 +420,7 @@ model UserSettings {
   defaultAspect  AspectRatio @default(VERTICAL)
   defaultLanguage String?    @default("es")
   subtitleStyle  Json?
+  hookTitles     Boolean     @default(true)
   theme          String      @default("system")
   updatedAt      DateTime    @updatedAt
   user           User        @relation(fields: [userId], references: [id], onDelete: Cascade)
@@ -471,4 +481,30 @@ model CaptureAgent {
   lastSeenAt  DateTime?
   revokedAt   DateTime?
   createdBy   User      @relation(fields: [createdById], references: [id], onDelete: Cascade)
+}
+
+/// Estilo de subtítulos guardado con nombre para reutilizarlo.
+model SubtitlePreset {
+  id        String   @id @default(uuid()) @db.Uuid
+  userId    String   @db.Uuid
+  name      String
+  style     Json
+  createdAt DateTime @default(now())
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+}
+
+/// Fuente TTF/OTF subida por el usuario para los subtítulos.
+model UserFont {
+  id         String   @id @default(uuid()) @db.Uuid
+  userId     String   @db.Uuid
+  family     String
+  fileName   String
+  storageKey String   @unique
+  sizeBytes  Int
+  createdAt  DateTime @default(now())
+  user       User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
 }

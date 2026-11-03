@@ -52,7 +52,10 @@ class Settings(BaseSettings):
     whisper_model: str = "small"
     whisper_compute_type: str = "auto"
     whisper_beam_size: int = 1
-    whisper_cpu_threads: int = 4
+    # 0 = todos los núcleos disponibles.
+    whisper_cpu_threads: int = 0
+    # Inferencia por lotes de faster-whisper (segmentos de voz en paralelo); 0 = secuencial.
+    whisper_batch_size: int = 8
     whisper_models_dir: Path = Path("/models")
     whisper_vad: bool = True
 
@@ -79,7 +82,7 @@ class Settings(BaseSettings):
     render_crf: int = 20
     render_max_upscale: float = 1.5
     ffmpeg_threads: int = 0
-    subtitle_font: str = "DejaVu Sans"
+    subtitle_font: str = "Montserrat"
 
     import_max_height: int = 1080
     max_download_mb: int = 8192

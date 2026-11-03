@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import logging
+import time
 from pathlib import Path
 
 from . import audio_signals, scoring, semantic, transcribe, visual_signals
@@ -62,7 +63,7 @@ def run_analysis(ctx: JobContext, job: AnalyzeJobData) -> dict:
         ctx.progress("transcribe", 0.0, "Transcribiendo", force=True)
         with ctx.timed("transcribe"):
             tr = transcribe.transcribe(wav, s, language=job.language, duration=duration, cancel=ctx.is_cancelled,
-                                       on_progress=ctx.stage_progress("transcribe"))
+                                       on_progress=eta_progress(ctx, "transcribe", "Transcribiendo"))
         # Tiempos absolutos en la línea de tiempo del proyecto.
         for seg in tr.segments:
             seg["start"] = round(seg["start"] + win_start, 3)
@@ -197,3 +198,18 @@ def apply_llm(ctx: JobContext, sig: scoring.Signals, cfg: scoring.ScoringConfig,
     out.sort(key=lambda x: x.score, reverse=True)
     status = "ok" if judged else ("failed" if attempted else "skipped")
     return scoring.dedupe(out), status
+
+
+def eta_progress(ctx, stage: str, label: str):
+    """Progreso con el tiempo restante estimado a partir de la velocidad medida hasta ahora."""
+    t0 = time.monotonic()
+
+    def cb(p: float) -> None:
+        elapsed = time.monotonic() - t0
+        msg = label
+        if 0.03 <= p < 1 and elapsed > 20:
+            left = elapsed * (1 - p) / p
+            msg = f"{label} · quedan ~{int(left // 60)} min" if left >= 90 else f"{label} · casi listo"
+        ctx.progress(stage, p, msg)
+
+    return cb

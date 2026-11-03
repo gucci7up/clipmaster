@@ -49,8 +49,16 @@ export interface Word {
   probability?: number;
 }
 
+export type SubtitlePreset = 'tiktok' | 'clean' | 'karaoke' | 'neon' | 'minimal' | 'podcast';
+export const SUBTITLE_PRESETS: SubtitlePreset[] = ['tiktok', 'karaoke', 'clean', 'neon', 'minimal', 'podcast'];
+
+/** Fuentes instaladas en la imagen del worker. Las fuentes propias se indican como `custom:<id>`. */
+export const BUILTIN_FONTS = ['Montserrat', 'DejaVu Sans', 'Roboto', 'Open Sans', 'Lato', 'Bebas Neue'] as const;
+
 export interface SubtitleStyle {
-  preset: 'tiktok' | 'clean' | 'karaoke';
+  preset: SubtitlePreset;
+  /** Familia de `BUILTIN_FONTS` o `custom:<id de UserFont>`. */
+  font: string;
   fontSize: number;
   primaryColor: string;
   highlightColor: string;
@@ -63,6 +71,7 @@ export interface SubtitleStyle {
 
 export const DEFAULT_SUBTITLE_STYLE: SubtitleStyle = {
   preset: 'tiktok',
+  font: 'Montserrat',
   fontSize: 72,
   primaryColor: '#FFFFFF',
   highlightColor: '#FFD400',
@@ -147,6 +156,15 @@ export interface RenderJobData {
   end: number;
   aspect: AspectRatio;
   subtitles: { enabled: boolean; style: SubtitleStyle; words: Word[] };
+  /** Título gancho en la parte superior durante los primeros segundos. */
+  hook?: { text: string; durationSec: number } | null;
+  /** Fuentes propias que el render debe descargar (clave en el almacenamiento y familia). */
+  fonts?: { key: string; family: string }[];
+  /**
+   * Clip combinado: tramos de la línea de tiempo del proyecto que se encadenan en orden. Si existe,
+   * `start`/`end` abarcan todos y las palabras usan tiempos de la línea de tiempo original.
+   */
+  segments?: { start: number; end: number }[] | null;
   reframe: { mode: 'auto' | 'center' | 'manual'; manualX?: number; manualY?: number };
   track?: CropKeyframe[] | null;
   outputPrefix: string;

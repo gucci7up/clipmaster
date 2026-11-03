@@ -3,7 +3,9 @@
 from __future__ import annotations
 
 import logging
+import os
 import threading
+import time
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Callable, Optional
@@ -31,6 +33,10 @@ class TranscriptResult:
     model: str = ""
 
 
+def cpu_threads(settings: Settings) -> int:
+    return settings.whisper_cpu_threads if settings.whisper_cpu_threads > 0 else max(1, os.cpu_count() or 4)
+
+
 def load_model(settings: Settings, force_cpu: bool = False):
     """Carga (una vez por proceso) el modelo; si CUDA falla al cargar, cae a CPU."""
     from faster_whisper import WhisperModel
@@ -48,7 +54,7 @@ def load_model(settings: Settings, force_cpu: bool = False):
                 device=device,
                 device_index=settings.cuda_device_index,
                 compute_type=compute,
-                cpu_threads=settings.whisper_cpu_threads,
+                cpu_threads=cpu_threads(settings),
                 download_root=str(settings.whisper_models_dir),
             )
         except Exception as exc:  # noqa: BLE001
@@ -59,7 +65,7 @@ def load_model(settings: Settings, force_cpu: bool = False):
             key = (settings.whisper_model, device, compute)
             model = WhisperModel(
                 settings.whisper_model, device="cpu", compute_type="int8",
-                cpu_threads=settings.whisper_cpu_threads, download_root=str(settings.whisper_models_dir),
+                cpu_threads=cpu_threads(settings), download_root=str(settings.whisper_models_dir),
             )
         _models[key] = model
         return model, device
@@ -95,16 +101,24 @@ def _transcribe(
     from .audio_signals import read_wav
 
     samples = audio if not isinstance(audio, Path) else read_wav(audio)
-    segments_iter, info = model.transcribe(  # type: ignore[attr-defined]
-        samples,
+    common = dict(
         language=language or None,
         beam_size=settings.whisper_beam_size,
         word_timestamps=True,
-        vad_filter=settings.whisper_vad,
         vad_parameters={"min_silence_duration_ms": 500},
         condition_on_previous_text=False,  # evita bucles de alucinación en audio largo
         initial_prompt=prompt,
     )
+    t0 = time.monotonic()
+    if settings.whisper_batch_size > 0:
+        # Por lotes: transcribe varios tramos de voz (detectados con VAD) a la vez. ~25 % más rápido
+        # en CPU y bastante más en GPU, con la misma calidad.
+        from faster_whisper import BatchedInferencePipeline
+
+        segments_iter, info = BatchedInferencePipeline(model).transcribe(  # type: ignore[arg-type]
+            samples, batch_size=settings.whisper_batch_size, **common)
+    else:
+        segments_iter, info = model.transcribe(samples, vad_filter=settings.whisper_vad, **common)  # type: ignore[attr-defined]
     out: list[dict] = []
     for i, seg in enumerate(segments_iter):
         if cancel and i % 5 == 0 and cancel():
@@ -129,6 +143,10 @@ def _transcribe(
         if on_progress and duration > 0:
             on_progress(min(1.0, seg.end / duration))
     out = resegment(out)
+    elapsed = time.monotonic() - t0
+    log.info("Transcripción: %.0f s de audio en %.0f s (%.1fx tiempo real, %s, %s, %d hilos, lotes %d)",
+             duration, elapsed, duration / elapsed if elapsed else 0, settings.whisper_model, device,
+             cpu_threads(settings), settings.whisper_batch_size)
     return TranscriptResult(
         language=info.language,
         language_probability=round(float(info.language_probability), 3) if info.language_probability is not None else None,

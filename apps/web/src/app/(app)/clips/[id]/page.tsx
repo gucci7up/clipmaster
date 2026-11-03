@@ -9,6 +9,7 @@ import { useEffect, useRef, useState } from 'react';
 import useSWR from 'swr';
 import { toast } from 'sonner';
 import { ErrorState, ScoreBadge } from '@/components/common';
+import { ScoreBreakdown, StyleLibrary, WordsEditor } from '@/components/clip-tools';
 import { SubtitleControls } from '@/components/subtitle-controls';
 import { Badge, Button, Card, CardContent, CardHeader, CardTitle, ConfirmButton, Input, Label, Select, Skeleton, Switch } from '@/components/ui';
 import { api, ApiError, Clip, ProjectDetail } from '@/lib/api';
@@ -27,12 +28,16 @@ interface Draft {
   subtitleStyle: SubtitleStyle;
   reframeMode: 'auto' | 'center' | 'manual';
   manualX: number;
+  hookEnabled: boolean;
+  hookText: string;
+  hookDuration: number;
 }
 
 function draftOf(c: Clip): Draft {
   return {
     title: c.title, start: c.start, end: c.end, aspect: c.aspect, subtitles: c.subtitles,
     subtitleStyle: { ...DEFAULT_SUBTITLE_STYLE, ...c.subtitleStyle }, reframeMode: c.reframeMode, manualX: c.manualX ?? 0.5,
+    hookEnabled: c.hookEnabled, hookText: c.hookText ?? '', hookDuration: c.hookDuration,
   };
 }
 
@@ -59,7 +64,8 @@ export default function ClipEditorPage() {
   const setStyle = <K extends keyof SubtitleStyle>(k: K, v: SubtitleStyle[K]) => setD({ ...d, subtitleStyle: { ...d.subtitleStyle, [k]: v } });
   const sourceDuration = project?.assets[0]?.durationSec ?? project?.captures[0]?.durationSec ?? Math.max(d.end + 30, clip.end + 30);
   const dirty = JSON.stringify(d) !== JSON.stringify(draftOf(clip));
-  const invalid = d.end - d.start < 3 ? 'El clip debe durar al menos 3 s' : d.end - d.start > 600 ? 'Máximo 10 minutos' : d.start < 0 || d.end > sourceDuration + 0.5 ? 'Fuera de la duración del video' : null;
+  const merged = !!clip.segments?.length;
+  const invalid = merged ? null : d.end - d.start < 3 ? 'El clip debe durar al menos 3 s' : d.end - d.start > 600 ? 'Máximo 10 minutos' : d.start < 0 || d.end > sourceDuration + 0.5 ? 'Fuera de la duración del video' : null;
 
   function seek(t: number) {
     if (sourceRef.current) {
@@ -75,7 +81,14 @@ export default function ClipEditorPage() {
       if (dirty) {
         await api(`/clips/${id}`, {
           method: 'PATCH',
-          json: { ...d, manualX: d.reframeMode === 'manual' ? d.manualX : null, manualY: null },
+          json: {
+            ...d,
+            start: merged ? undefined : d.start,
+            end: merged ? undefined : d.end,
+            hookText: d.hookText.trim() || null,
+            manualX: d.reframeMode === 'manual' ? d.manualX : null,
+            manualY: null,
+          },
         });
       }
       if (regenerate) await api(`/clips/${id}/regenerate`, { method: 'POST' });
@@ -98,6 +111,8 @@ export default function ClipEditorPage() {
           <ScoreBadge score={clip.score} />
           {rendering && <Badge><Loader2 className="size-3 animate-spin" /> Renderizando</Badge>}
           {clip.status === 'FAILED' && <Badge variant="destructive">Render fallido</Badge>}
+          {merged && <Badge variant="secondary">Combinado</Badge>}
+          {clip.wordsEdited && <Badge variant="secondary">Texto corregido</Badge>}
         </div>
         <div className="flex flex-wrap gap-2">
           {clip.downloadUrl && <Button variant="outline" asChild><a href={clip.downloadUrl}><Download /> Descargar MP4</a></Button>}
@@ -137,6 +152,24 @@ export default function ClipEditorPage() {
               </div>
             </Card>
           </div>
+          {merged ? (
+            <Card>
+              <CardHeader><CardTitle>Tramos combinados</CardTitle></CardHeader>
+              <CardContent>
+                <ol className="space-y-1 text-sm">
+                  {clip.segments!.map((g, i) => (
+                    <li key={i} className="flex items-center justify-between gap-2 rounded-lg border px-3 py-2">
+                      <span>{i + 1}. <span className="font-mono text-xs">{formatTimecode(g.start)} – {formatTimecode(g.end)}</span></span>
+                      <span className="flex items-center gap-2 text-xs text-muted-foreground">{formatDuration(g.end - g.start)}
+                        <Button size="sm" variant="ghost" onClick={() => seek(g.start)} disabled={!project?.originalUrl}>Ver</Button>
+                      </span>
+                    </li>
+                  ))}
+                </ol>
+                <p className="mt-3 text-xs text-muted-foreground">Para cambiar los tramos, ajusta los clips originales y vuelve a combinarlos.</p>
+              </CardContent>
+            </Card>
+          ) : (
           <Card>
             <CardHeader><CardTitle>Recorte</CardTitle></CardHeader>
             <CardContent className="space-y-4">
@@ -150,10 +183,9 @@ export default function ClipEditorPage() {
               {invalid && <p className="text-sm text-destructive">{invalid}</p>}
             </CardContent>
           </Card>
-          <Card>
-            <CardHeader><CardTitle>Por qué se eligió</CardTitle></CardHeader>
-            <CardContent className="text-sm text-muted-foreground">{clip.reason}</CardContent>
-          </Card>
+          )}
+          {d.subtitles && <WordsEditor clipId={clip.id} onSaved={() => void mutate()} />}
+          <ScoreBreakdown clip={clip} />
         </div>
 
         <div className="space-y-6">
@@ -184,7 +216,24 @@ export default function ClipEditorPage() {
                 )}
               </div>
               <label className="flex items-center justify-between text-sm"><span className="font-medium">Subtítulos</span><Switch checked={d.subtitles} onCheckedChange={(v) => set('subtitles', v)} label="Subtítulos" /></label>
-              {d.subtitles && <SubtitleControls style={d.subtitleStyle} setStyle={setStyle} />}
+              {d.subtitles && (
+                <>
+                  <SubtitleControls style={d.subtitleStyle} setStyle={setStyle} />
+                  <StyleLibrary style={d.subtitleStyle} projectId={clip.projectId} onPick={(st) => set('subtitleStyle', { ...DEFAULT_SUBTITLE_STYLE, ...st })} />
+                </>
+              )}
+              <div className="space-y-2 rounded-lg border p-3">
+                <label className="flex items-center justify-between text-sm"><span className="font-medium">Título gancho</span><Switch checked={d.hookEnabled} onCheckedChange={(v) => set('hookEnabled', v)} label="Título gancho" /></label>
+                <p className="text-xs text-muted-foreground">Texto grande arriba durante los primeros segundos para captar la atención.</p>
+                {d.hookEnabled && (
+                  <div className="grid grid-cols-[1fr_88px] gap-2">
+                    <Input aria-label="Texto del título gancho" placeholder={d.title} maxLength={120} value={d.hookText} onChange={(e) => set('hookText', e.target.value)} />
+                    <Select aria-label="Duración del título gancho" value={String(d.hookDuration)} onChange={(e) => set('hookDuration', Number(e.target.value))}>
+                      {[2, 3, 4, 5, 6].map((n) => <option key={n} value={n}>{n} s</option>)}
+                    </Select>
+                  </div>
+                )}
+              </div>
             </CardContent>
           </Card>
           <div className="grid grid-cols-2 gap-2">

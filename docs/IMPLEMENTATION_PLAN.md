@@ -44,6 +44,17 @@ Leyenda:
 | YouTube, Twitch, Kick, TikTok vía yt-dlp (sin cookies) | 🟡 *best-effort* (ver `STREAM_PROVIDERS.md`) |
 | Capturador remoto para YouTube (PC del usuario, HTTPS saliente, cola en PostgreSQL con lease) | 🟡 protocolo probado (API + PostgreSQL real, agente con servidor simulado); descarga real desde un PC pendiente de verificar |
 
+## Editor (mejoras inspiradas en otros clipeadores; código propio)
+
+| Elemento | Estado |
+|----------|--------|
+| Corrección de palabras del subtítulo sin cambiar tiempos | ✅ integración (PostgreSQL real) |
+| Título gancho en los primeros segundos | ✅ unitarias + e2e de render |
+| Estilos guardados y aplicar estilo a todo el proyecto | ✅ integración |
+| Plantillas neon / minimal / podcast y fuentes propias TTF/OTF | ✅ unitarias + e2e de render con fuente subida |
+| Desglose de la puntuación (componentes reales del análisis) | ✅ |
+| Combinar clips en uno nuevo | ✅ integración + e2e de render (dos tramos concatenados) |
+
 ## Etapa 4: Directos
 
 | Elemento | Estado |

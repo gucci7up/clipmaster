@@ -5,7 +5,8 @@ Plataforma autoalojada que convierte videos largos y transmisiones en clips cort
 - detecta los mejores momentos con IA local: transcripción, audio, visión y semántica;
 - los recorta con contexto;
 - los reencuadra a 9:16, 16:9 o 1:1;
-- añade subtítulos animados.
+- añade subtítulos animados (6 plantillas, fuentes propias, texto corregible palabra a palabra) y un título gancho;
+- permite combinar varios clips en uno.
 
 Interfaz en español. Funciona en CPU, y opcionalmente en GPU NVIDIA.
 

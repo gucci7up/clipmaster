@@ -1,4 +1,4 @@
-import type { AspectRatio, ContentMode, ProviderId, SubtitleStyle } from '@clipmaster/shared';
+import type { AspectRatio, ContentMode, ProviderId, SubtitleStyle, Word } from '@clipmaster/shared';
 
 export class ApiError extends Error {
   constructor(public status: number, message: string, public body?: unknown) {
@@ -157,6 +157,35 @@ export interface Clip {
   subtitleUrl: string | null;
   renders: ClipRender[];
   currentRender: ClipRender | null;
+  hookEnabled: boolean;
+  hookText: string | null;
+  hookDuration: number;
+  /** Clip combinado: tramos de la línea de tiempo del proyecto, en orden. */
+  segments: { start: number; end: number }[] | null;
+  wordsEdited: boolean;
+  /** Componentes reales de la puntuación (0–1) calculados en el análisis. */
+  candidate: { signals: Record<string, number>; tags: string[] } | null;
+  createdAt: string;
+}
+
+export interface ClipWords {
+  words: Word[];
+  original: Word[];
+  edited: boolean;
+}
+
+export interface SubtitlePresetRow {
+  id: string;
+  name: string;
+  style: SubtitleStyle;
+  createdAt: string;
+}
+
+export interface UserFontRow {
+  id: string;
+  family: string;
+  fileName: string;
+  sizeBytes: number;
   createdAt: string;
 }
 

@@ -53,7 +53,9 @@ class Word(_Model):
 
 
 class SubtitleStyle(_Model):
-    preset: Literal["tiktok", "clean", "karaoke"] = "tiktok"
+    preset: Literal["tiktok", "clean", "karaoke", "neon", "minimal", "podcast"] = "tiktok"
+    # Familia instalada o `custom:<id>` (se resuelve con RenderJobData.fonts).
+    font: str = "Montserrat"
     fontSize: int = 72
     primaryColor: str = "#FFFFFF"
     highlightColor: str = "#FFD400"
@@ -142,6 +144,21 @@ class Subtitles(_Model):
     words: list[Word]
 
 
+class Hook(_Model):
+    text: str
+    durationSec: float = 3.0
+
+
+class FontRef(_Model):
+    key: str
+    family: str
+
+
+class Segment(_Model):
+    start: float
+    end: float
+
+
 class Reframe(_Model):
     mode: Literal["auto", "center", "manual"] = "auto"
     manualX: Optional[float] = None
@@ -160,6 +177,9 @@ class RenderJobData(_Model):
     end: float
     aspect: AspectRatio
     subtitles: Subtitles
+    hook: Optional[Hook] = None
+    fonts: list[FontRef] = Field(default_factory=list)
+    segments: Optional[list[Segment]] = None
     reframe: Reframe
     track: Optional[list[CropKeyframe]] = None
     outputPrefix: str

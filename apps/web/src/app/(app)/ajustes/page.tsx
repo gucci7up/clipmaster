@@ -8,13 +8,15 @@ import { useEffect, useState } from 'react';
 import useSWR from 'swr';
 import { toast } from 'sonner';
 import { PageHeader } from '@/components/common';
+import { PresetList } from '@/components/clip-tools';
+import { FontManager } from '@/components/font-manager';
 import { SubtitleControls } from '@/components/subtitle-controls';
 import { Button, Card, CardContent, CardDescription, CardHeader, CardTitle, Input, Label, Select, Skeleton, Switch } from '@/components/ui';
 import { api, ApiError } from '@/lib/api';
 import { cn } from '@/lib/utils';
 
 interface SettingsResponse {
-  settings: { defaultMode: ContentMode; defaultAspect: AspectRatio; defaultLanguage: string | null; theme: string; subtitleStyle: Partial<SubtitleStyle> | null };
+  settings: { defaultMode: ContentMode; defaultAspect: AspectRatio; defaultLanguage: string | null; theme: string; subtitleStyle: Partial<SubtitleStyle> | null; hookTitles: boolean };
   ai: { weights: Partial<SignalWeights> | null; visualAnalysis: boolean; semanticLLM: boolean };
   llmProvider: string | null;
 }
@@ -35,6 +37,7 @@ export default function SettingsPage() {
   const [aspect, setAspect] = useState<AspectRatio>('VERTICAL');
   const [language, setLanguage] = useState('es');
   const [style, setStyleState] = useState<SubtitleStyle>(DEFAULT_SUBTITLE_STYLE);
+  const [hookTitles, setHookTitles] = useState(true);
   const [customWeights, setCustomWeights] = useState(false);
   const [weights, setWeights] = useState<SignalWeights>(MODES.AUTO.weights);
   const [visual, setVisual] = useState(true);
@@ -48,6 +51,7 @@ export default function SettingsPage() {
     setAspect(data.settings.defaultAspect);
     setLanguage(data.settings.defaultLanguage ?? '');
     setStyleState({ ...DEFAULT_SUBTITLE_STYLE, ...data.settings.subtitleStyle });
+    setHookTitles(data.settings.hookTitles);
     setCustomWeights(!!data.ai.weights);
     setWeights({ ...MODES.AUTO.weights, ...data.ai.weights });
     setVisual(data.ai.visualAnalysis);
@@ -108,7 +112,16 @@ export default function SettingsPage() {
           <CardHeader><CardTitle>Subtítulos predeterminados</CardTitle><CardDescription>Estilo que se aplica a los clips nuevos.</CardDescription></CardHeader>
           <CardContent className="space-y-4">
             <SubtitleControls style={style} setStyle={setStyle} />
-            <Button loading={busy === 'style'} onClick={() => run('style', () => api('/settings', { method: 'PUT', json: { subtitleStyle: style } }), 'Estilo guardado')}>Guardar estilo</Button>
+            <label className="flex items-center justify-between gap-4 text-sm"><span>Título gancho en clips nuevos<span className="block text-xs text-muted-foreground">El título del clip aparece arriba durante los primeros segundos</span></span><Switch checked={hookTitles} onCheckedChange={setHookTitles} label="Título gancho" /></label>
+            <Button loading={busy === 'style'} onClick={() => run('style', () => api('/settings', { method: 'PUT', json: { subtitleStyle: style, hookTitles } }), 'Estilo guardado')}>Guardar estilo</Button>
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader><CardTitle>Estilos y fuentes</CardTitle><CardDescription>Estilos de subtítulos guardados y fuentes TTF/OTF propias (máx. 10 MB).</CardDescription></CardHeader>
+          <CardContent className="space-y-4">
+            <PresetList />
+            <FontManager />
           </CardContent>
         </Card>
 

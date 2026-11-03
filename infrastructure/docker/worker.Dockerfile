@@ -12,7 +12,7 @@ ENV PYTHONDONTWRITEBYTECODE=1 PYTHONUNBUFFERED=1 PIP_NO_CACHE_DIR=1 \
 
 # ffmpeg de Debian trixie (7.1) incluye libass (subtítulos), libx264 y soporte NVENC.
 RUN apt-get update \
- && apt-get install -y --no-install-recommends ffmpeg fonts-dejavu-core ca-certificates tini \
+ && apt-get install -y --no-install-recommends ffmpeg fonts-dejavu-core fonts-montserrat fonts-roboto-unhinted fonts-open-sans fonts-lato fonts-bebas-neue ca-certificates tini \
  && if [ "$INSTALL_TEST_TOOLS" = "1" ]; then apt-get install -y --no-install-recommends espeak-ng; fi \
  && rm -rf /var/lib/apt/lists/*
 

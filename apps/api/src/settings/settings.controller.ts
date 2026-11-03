@@ -19,6 +19,7 @@ class UpdateSettingsDto {
   @ApiPropertyOptional() @IsOptional() @IsString() @MaxLength(8) defaultLanguage?: string;
   @ApiPropertyOptional() @IsOptional() @IsIn(['system', 'light', 'dark']) theme?: string;
   @ApiPropertyOptional() @IsOptional() @IsObject() subtitleStyle?: Partial<SubtitleStyle>;
+  @ApiPropertyOptional() @IsOptional() @IsBoolean() hookTitles?: boolean;
 }
 
 class UpdateAiSettingsDto {
@@ -79,6 +80,7 @@ export class SettingsController {
       defaultLanguage: dto.defaultLanguage === '' ? null : dto.defaultLanguage,
       theme: dto.theme,
       subtitleStyle: dto.subtitleStyle ? (sanitizeStyle(dto.subtitleStyle) as Prisma.InputJsonValue) : undefined,
+      hookTitles: dto.hookTitles,
     };
     return this.prisma.userSettings.upsert({ where: { userId: user.id }, create: { userId: user.id, ...data }, update: data });
   }

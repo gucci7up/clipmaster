@@ -37,6 +37,8 @@ El resultado incluye `modules` (con el valor `ok`, `skipped` o `failed` para cad
 
 - **Español prioritario:** el idioma por defecto es `es` y se usa un `initial_prompt` con vocabulario coloquial caribeño y dominicano para orientar la ortografía.
 - `condition_on_previous_text=False` evita bucles de alucinación.
+- **Por lotes:** con `WHISPER_BATCH_SIZE>0` (8 por defecto) se usa `BatchedInferencePipeline`: el VAD corta el audio en tramos de voz y se transcriben varios a la vez. En CPU (i5-12500, `small`, int8) fue ~25 % más rápido que el modo secuencial con la misma salida; en GPU la mejora es mayor. `WHISPER_BATCH_SIZE=0` vuelve al modo secuencial.
+- `WHISPER_CPU_THREADS=0` (por defecto) usa todos los núcleos. El log del ai-worker registra la velocidad real (`Transcripción: N s de audio en M s (Xx tiempo real…)`) y la interfaz muestra el tiempo restante estimado a partir de esa velocidad.
 - Se descartan segmentos vacíos y los que tienen a la vez `no_speech_prob > 0,8` y `avg_logprob < −1` (habla improbable). El VAD de faster-whisper elimina además los tramos sin voz.
 - **Dispositivo:**
   - Con `DEVICE=auto`, se intenta CUDA. Si la carga o la ejecución fallan (cuBLAS/cuDNN ausentes o GPU no compatible), se vuelve a CPU y se registra un aviso.
@@ -120,10 +122,11 @@ No hay que tocar código de puntuación.
    - **manual:** posición X/Y elegida por el usuario.
    - El escalado está limitado por `RENDER_MAX_UPSCALE` (1,5 por defecto). Si el origen es pequeño, la salida mantiene la relación de aspecto pedida con menos resolución que 1080×1920 / 1920×1080 / 1080×1080, en vez de inventar calidad.
 3. **Subtítulos ASS.**
-   - `tiktok`: palabra activa resaltada y mayúsculas.
-   - `karaoke`: `\k`.
-   - `clean`.
-   - Usan los tiempos por palabra de Whisper. Las llaves se escapan, así que el texto del usuario no puede inyectar etiquetas ASS.
+   - Plantillas: `tiktok` (palabra activa resaltada), `karaoke` (`\k`), `clean`, `neon` (brillo con `\blur` del color de resaltado), `minimal` (sin borde, sombra suave) y `podcast` (caja opaca, `BorderStyle 3`).
+   - Fuentes incluidas en la imagen: Montserrat (predeterminada), DejaVu Sans, Roboto, Open Sans, Lato y Bebas Neue. Las fuentes TTF/OTF que sube el usuario se descargan al directorio de trabajo y se pasan a libass con `fontsdir`; la API lee su nombre de familia de la tabla `name` del archivo.
+   - Usan los tiempos por palabra de Whisper. El usuario puede corregir el texto de cada palabra (`Clip.wordOverride`) sin cambiar los tiempos; una palabra vacía se elimina. Las llaves se escapan, así que el texto del usuario no puede inyectar etiquetas ASS.
+   - **Título gancho:** estilo `Hook` (caja blanca arriba) durante los primeros 1–10 s con el título del clip o un texto propio. Se activa por defecto en los clips nuevos (`UserSettings.hookTitles`).
+   - **Clips combinados:** `segments` lista los tramos en orden. Cada tramo se renderiza por separado (con su propio reencuadre y su parte de los subtítulos; el gancho sólo en el primero) y se unen con el demuxer concat sin recodificar. Las palabras se pasan a la línea de tiempo del clip resultante.
 4. **Codificación.**
    - libx264 (CRF 20, `veryfast`) + AAC, con `+faststart`.
    - `h264_nvenc` solo si `RENDER_ENCODER` lo permite **y** una codificación de prueba funciona; si falla en el render real, se repite con libx264.

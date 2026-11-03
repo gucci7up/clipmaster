@@ -8,6 +8,7 @@ import { AuthController } from './auth/auth.controller';
 import { AuthGuard } from './auth/auth.guard';
 import { AuthService } from './auth/auth.service';
 import { ClipsController } from './clips/clips.controller';
+import { StylesController } from './clips/styles.controller';
 import { ClipsService } from './clips/clips.service';
 import { AuditService } from './common/audit.service';
 import { PrismaService } from './common/prisma.service';
@@ -48,6 +49,7 @@ import { StatsController } from './stats/stats.controller';
     AuthController,
     ProjectsController,
     ClipsController,
+    StylesController,
     MediaController,
     EventsController,
     StatsController,

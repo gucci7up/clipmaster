@@ -14,7 +14,7 @@ from clipmaster_worker.providers import detect
 from clipmaster_worker.reframe import piecewise_expr, plan_crop, simplify
 from clipmaster_worker.semantic import LLMVerdict, make_title, segment_features
 from clipmaster_worker.storage import LocalStorage, validate_key
-from clipmaster_worker.subtitles import build_ass, build_srt, chunk_words
+from clipmaster_worker.subtitles import build_ass, build_srt, chunk_words, map_to_timeline
 from clipmaster_worker.url_guard import UnsafeUrl, check_url
 
 SHARED = Path(__file__).resolve().parents[3] / "packages" / "shared"
@@ -248,3 +248,25 @@ def test_friendly_platform_errors(raw, expected):
     from clipmaster_worker.providers.platforms import _friendly
 
     assert expected in _friendly(Exception(raw))
+
+
+@pytest.mark.parametrize("preset,marker", [("neon", r"\blur"), ("podcast", ",3,"), ("minimal", "Default"), ("karaoke", r"\k")])
+def test_ass_templates(preset, marker):
+    words = [Word(start=0.1, end=0.5, word="hola"), Word(start=0.6, end=1.0, word="mundo")]
+    ass = build_ass(words, SubtitleStyle(preset=preset, font="Lato"), 1080, 1920, "DejaVu Sans", clip_start=0, clip_end=2)
+    assert marker in ass
+    assert "Style: Default,Lato," in ass  # la fuente del estilo tiene prioridad sobre la de la configuración
+
+
+def test_ass_hook_title_is_escaped_and_timed():
+    ass = build_ass([], SubtitleStyle(), 1080, 1920, "DejaVu Sans", 0, 20, hook="Mira {esto}", hook_duration=3)
+    line = next(x for x in ass.splitlines() if ",Hook," in x)
+    assert line.startswith("Dialogue: 1,0:00:00.00,0:00:03.00,Hook")
+    assert "{esto}" not in line and "(esto)" in line
+
+
+def test_map_to_timeline_concatenates_segments():
+    words = [Word(start=2.2, end=2.6, word="a"), Word(start=9.0, end=9.5, word="fuera"), Word(start=20.4, end=20.9, word="b")]
+    mapped = map_to_timeline(words, [(2.0, 5.0), (20.0, 22.0)])
+    assert [w.word for w in mapped] == ["a", "b"]
+    assert mapped[0].start == pytest.approx(0.2) and mapped[1].start == pytest.approx(3.4)

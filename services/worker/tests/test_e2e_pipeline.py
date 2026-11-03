@@ -121,3 +121,36 @@ def test_progress_events_are_real(pipeline):
     assert {"import", "audio", "scoring"} <= stages
     values = [e[1] for e in pipeline["events"] if e[1] is not None]
     assert all(0 <= v <= 1 for v in values)
+
+
+def test_render_merged_clip_with_hook_template_and_custom_font(pipeline, tmp_path):
+    """Clip combinado de dos tramos con título gancho, plantilla neon y una fuente subida por el usuario."""
+    import shutil
+    from pathlib import Path
+
+    a = pipeline["analysis"]
+    storage = pipeline["storage"]
+    words = [w for s in a["segments"] for w in s["words"]]
+    fonts = []
+    candidates = [Path(r"C:\Windows\Fonts\arial.ttf"), Path("/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf")]
+    font_file = next((p for p in candidates if p.exists()), None)
+    if font_file:
+        key = f"fonts/{USER}/f1.ttf"
+        storage.upload(font_file, key, "font/ttf")
+        fonts = [{"key": key, "family": "Arial" if "arial" in font_file.name else "DejaVu Sans"}]
+    segments = [{"start": 2.0, "end": 8.0}, {"start": 20.0, "end": 26.5}]
+    res = run_render(pipeline["ctx"]("render-merged"), RenderJobData(
+        kind="render", jobId="job-render-merged", projectId=PROJECT, userId=USER, clipId="clip2", renderId="rmerged",
+        sources=[{"key": pipeline["import"]["asset"]["key"], "offsetSec": 0, "durationSec": 40}],
+        start=2.0, end=26.5, aspect="VERTICAL", segments=segments,
+        subtitles={"enabled": True, "style": {"preset": "neon", "font": fonts[0]["family"] if fonts else "DejaVu Sans"}, "words": words},
+        hook={"text": "Esto no te lo esperas", "durationSec": 2.5}, fonts=fonts, reframe={"mode": "center"},
+        outputPrefix=f"clips/{USER}/{PROJECT}",
+    ))
+    info = probe(storage.path(res["outputKey"]))
+    assert info.has_video and info.has_audio and info.video_codec == "h264"
+    assert abs(info.duration - 12.5) < 0.6  # 6 s + 6.5 s
+    assert abs(info.width / info.height - 9 / 16) < 0.02
+    ass = storage.path(res["subtitleKey"]).read_text(encoding="utf-8")
+    assert "Esto no te lo esperas" in ass and r"\blur" in ass
+    shutil.rmtree(tmp_path, ignore_errors=True)

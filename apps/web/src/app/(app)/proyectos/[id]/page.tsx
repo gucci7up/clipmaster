@@ -7,6 +7,7 @@ import { useParams, useRouter } from 'next/navigation';
 import { useState } from 'react';
 import useSWR from 'swr';
 import { toast } from 'sonner';
+import { MergeClipsDialog } from '@/components/clip-tools';
 import { ClipCard, EmptyState, ErrorState, STATUS, StatusBadge } from '@/components/common';
 import { Badge, Button, Card, CardContent, CardHeader, CardTitle, ConfirmButton, Progress, Skeleton, Tabs } from '@/components/ui';
 import { api, ApiError, Clip, Job, ProjectDetail } from '@/lib/api';
@@ -122,7 +123,10 @@ export default function ProjectDetailPage() {
               : clips.length === 0 ? (
                 <EmptyState icon={Film} title={active ? 'Buscando los mejores momentos…' : 'No se generaron clips'} description={active ? 'Los clips aparecerán aquí en cuanto estén listos.' : 'Prueba con otro modo de contenido, una duración distinta o la preferencia “Cantidad”.'} />
               ) : (
-                <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">{clips.map((c) => <ClipCard key={c.id} clip={c} />)}</div>
+                <div className="space-y-3">
+                  <div className="flex justify-end"><MergeClipsDialog clips={clips} /></div>
+                  <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">{clips.map((c) => <ClipCard key={c.id} clip={c} />)}</div>
+                </div>
               )
           )}
           {tab === 'transcript' && (

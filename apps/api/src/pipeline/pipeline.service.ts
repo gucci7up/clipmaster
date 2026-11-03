@@ -35,6 +35,7 @@ import { env } from '../config/env';
 import { EventsService } from '../events/events.service';
 import { QueueService } from './queue.service';
 import { selectClips, wordsInRange } from './selection';
+import { asOverride, asRanges, effectiveWords } from '../clips/words';
 
 export const TERMINAL_PROJECT: ProjectStatus[] = [ProjectStatus.COMPLETED, ProjectStatus.FAILED, ProjectStatus.CANCELLED];
 const ACTIVE_JOB: JobStatus[] = [JobStatus.QUEUED, JobStatus.RUNNING];
@@ -191,6 +192,16 @@ export class PipelineService {
     const project = clip.project;
     const sources = await this.sourcesFor(project.id, clip.start, clip.end);
     if (!sources.length) throw new BadRequestException('No hay video fuente disponible para este rango');
+    const ranges = asRanges(clip.segments);
+    const style: SubtitleStyle = { ...DEFAULT_SUBTITLE_STYLE, ...((clip.subtitleStyle as Partial<SubtitleStyle>) ?? {}) };
+    // Fuente propia: el render la descarga y libass la encuentra por su nombre de familia.
+    const fonts: { key: string; family: string }[] = [];
+    const custom = /^custom:([0-9a-f-]{36})$/.exec(style.font ?? '');
+    if (custom) {
+      const font = await this.prisma.userFont.findFirst({ where: { id: custom[1], userId: project.userId } });
+      if (font) fonts.push({ key: font.storageKey, family: font.family });
+      style.font = font?.family ?? DEFAULT_SUBTITLE_STYLE.font;
+    }
     const segs = await this.prisma.transcriptSegment.findMany({
       where: { projectId: project.id, end: { gt: clip.start }, start: { lt: clip.end } },
       orderBy: { start: 'asc' },
@@ -212,9 +223,12 @@ export class PipelineService {
       aspect: clip.aspect,
       subtitles: {
         enabled: clip.subtitles,
-        style: { ...DEFAULT_SUBTITLE_STYLE, ...((clip.subtitleStyle as Partial<SubtitleStyle>) ?? {}) },
-        words: wordsInRange(segs, clip.start, clip.end),
+        style,
+        words: effectiveWords(wordsInRange(segs, clip.start, clip.end), asOverride(clip.wordOverride), ranges ?? [{ start: clip.start, end: clip.end }]),
       },
+      hook: clip.hookEnabled ? { text: (clip.hookText || clip.title).slice(0, 120), durationSec: clip.hookDuration } : null,
+      fonts,
+      segments: ranges,
       reframe: {
         mode: (clip.reframeMode as 'auto' | 'center' | 'manual') ?? 'auto',
         manualX: clip.manualX ?? undefined,
@@ -505,6 +519,7 @@ export class PipelineService {
       allowFallback: !isLiveSegment,
     });
     const style = await this.userSubtitleStyle(project.userId);
+    const hookTitles = (await this.prisma.userSettings.findUnique({ where: { userId: project.userId } }))?.hookTitles ?? true;
     for (const s of selected) {
       const idx = r.candidates.indexOf(s.candidate);
       const cand = created[idx];
@@ -514,7 +529,7 @@ export class PipelineService {
           projectId: project.id, candidateId: cand.id, title: s.candidate.title.slice(0, 200),
           reason: (s.lowConfidence ? '[Confianza baja] ' : '') + s.candidate.reason.slice(0, 1000),
           score: s.candidate.score, start: s.candidate.start, end: s.candidate.end, aspect: project.aspect,
-          subtitles: project.subtitles, subtitleStyle: style as unknown as Prisma.InputJsonValue,
+          subtitles: project.subtitles, subtitleStyle: style as unknown as Prisma.InputJsonValue, hookEnabled: hookTitles,
         },
       });
       await this.enqueueRender(clip.id);
