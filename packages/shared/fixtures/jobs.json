@@ -1,0 +1,59 @@
+[
+  {
+    "kind": "import",
+    "jobId": "6f1c0e8a-6a0b-4c6e-9a51-1f2d7f3b9a01",
+    "projectId": "0b9a5f8e-2b1c-4b1a-8b55-0b6a7f1c2d01",
+    "userId": "a3c1f0e2-7d4b-4e9a-b6c2-4c1d2e3f4a01",
+    "source": { "type": "upload", "storageKey": "uploads/a3c1/0b9a/2f3e.mp4" },
+    "outputPrefix": "originals/a3c1/0b9a",
+    "maxDurationSec": 14400
+  },
+  {
+    "kind": "live",
+    "jobId": "6f1c0e8a-6a0b-4c6e-9a51-1f2d7f3b9a02",
+    "projectId": "0b9a5f8e-2b1c-4b1a-8b55-0b6a7f1c2d01",
+    "userId": "a3c1f0e2-7d4b-4e9a-b6c2-4c1d2e3f4a01",
+    "captureSessionId": "9d8c7b6a-5f4e-4d3c-8b2a-1f0e9d8c7b01",
+    "url": "https://www.twitch.tv/somechannel",
+    "provider": "TWITCH",
+    "segmentSeconds": 60,
+    "maxDurationSec": 21600,
+    "startIndex": 0,
+    "startOffsetSec": 0,
+    "outputPrefix": "segments/a3c1/0b9a"
+  },
+  {
+    "kind": "analyze",
+    "jobId": "6f1c0e8a-6a0b-4c6e-9a51-1f2d7f3b9a03",
+    "projectId": "0b9a5f8e-2b1c-4b1a-8b55-0b6a7f1c2d01",
+    "userId": "a3c1f0e2-7d4b-4e9a-b6c2-4c1d2e3f4a01",
+    "sources": [{ "key": "originals/a3c1/0b9a/v.mp4", "offsetSec": 0, "durationSec": 120.5 }],
+    "window": { "start": 0, "end": 120.5 },
+    "focus": { "start": 0, "end": 120.5 },
+    "language": "es",
+    "mode": "AUTO",
+    "settings": { "maxClips": 10, "minDuration": 15, "maxDuration": 60, "visualAnalysis": true, "semanticLLM": false, "preference": "balanced" },
+    "outputPrefix": "analysis/a3c1/0b9a",
+    "segmentId": null
+  },
+  {
+    "kind": "render",
+    "jobId": "6f1c0e8a-6a0b-4c6e-9a51-1f2d7f3b9a04",
+    "projectId": "0b9a5f8e-2b1c-4b1a-8b55-0b6a7f1c2d01",
+    "userId": "a3c1f0e2-7d4b-4e9a-b6c2-4c1d2e3f4a01",
+    "clipId": "1a2b3c4d-5e6f-4a1b-8c2d-3e4f5a6b7c01",
+    "renderId": "1a2b3c4d-5e6f-4a1b-8c2d-3e4f5a6b7c02",
+    "sources": [{ "key": "originals/a3c1/0b9a/v.mp4", "offsetSec": 0, "durationSec": 120.5 }],
+    "start": 10.0,
+    "end": 35.5,
+    "aspect": "VERTICAL",
+    "subtitles": {
+      "enabled": true,
+      "style": { "preset": "tiktok", "fontSize": 72, "primaryColor": "#FFFFFF", "highlightColor": "#FFD400", "outlineColor": "#000000", "outlineWidth": 5, "position": "center", "uppercase": true, "maxWordsPerLine": 4 },
+      "words": [{ "start": 10.2, "end": 10.6, "word": "Hola", "probability": 0.98 }]
+    },
+    "reframe": { "mode": "auto" },
+    "track": [{ "t": 0, "x": 0.5, "y": 0.4 }],
+    "outputPrefix": "clips/a3c1/0b9a"
+  }
+]

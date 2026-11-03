@@ -1,0 +1,48 @@
+# Overlay GPU (opcional). Uso:
+#   docker compose -f compose.yaml -f compose.gpu.yaml up -d --build
+#
+# Requisitos del host: driver NVIDIA + NVIDIA Container Toolkit (`nvidia-ctk runtime configure`).
+# Cada worker se puede asignar a una GPU distinta con AI_GPU_ID / RENDER_GPU_ID (índices de nvidia-smi).
+# Si CUDA o NVENC no funcionan en tiempo de ejecución, los workers vuelven a CPU automáticamente
+# (transcripción en CPU, render con libx264) y lo registran en los logs.
+
+x-gpu-env: &gpu-env
+  NVIDIA_DRIVER_CAPABILITIES: compute,video,utility
+
+services:
+  ai-worker:
+    build:
+      args:
+        GPU: "1"
+    image: ${WORKER_GPU_IMAGE:-clipmaster-worker-gpu:latest}
+    environment:
+      <<: *gpu-env
+      DEVICE: ${AI_DEVICE:-auto}
+      # Pascal (GTX 10xx) no tiene núcleos tensor: int8 o float32 suelen ser más estables que float16.
+      WHISPER_COMPUTE_TYPE: ${WHISPER_COMPUTE_TYPE:-auto}
+      WHISPER_MODEL: ${WHISPER_MODEL:-medium}
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              device_ids: ["${AI_GPU_ID:-0}"]
+              capabilities: [gpu, compute, utility]
+
+  render-worker:
+    build:
+      args:
+        GPU: "1"
+    image: ${WORKER_GPU_IMAGE:-clipmaster-worker-gpu:latest}
+    environment:
+      <<: *gpu-env
+      DEVICE: auto
+      # auto = NVENC sólo si una codificación de prueba funciona; si no, libx264.
+      RENDER_ENCODER: ${RENDER_ENCODER:-auto}
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              device_ids: ["${RENDER_GPU_ID:-0}"]
+              capabilities: [gpu, video, utility]

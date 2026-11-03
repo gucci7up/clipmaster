@@ -1,0 +1,14 @@
+[project]
+name = "clipmaster-worker"
+version = "0.1.0"
+description = "Workers de captura, IA y render de ClipMaster AI"
+requires-python = ">=3.11"
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+asyncio_mode = "auto"
+asyncio_default_fixture_loop_scope = "function"
+markers = [
+  "slow: pruebas que descargan modelos o procesan video real",
+  "network: requieren acceso a Internet",
+]

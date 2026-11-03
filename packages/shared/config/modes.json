@@ -1,0 +1,21 @@
+{
+  "$comment": "Fuente única de verdad para los modos de contenido. La leen la API (TypeScript) y los workers (Python). Los pesos se normalizan al calcular la puntuación.",
+  "signals": ["semantic", "emotion", "audio", "visual", "chat", "narrative", "standalone"],
+  "modes": {
+    "AUTO":      { "label": "Automático",  "weights": { "semantic": 0.30, "emotion": 0.20, "audio": 0.15, "visual": 0.10, "chat": 0.05, "narrative": 0.12, "standalone": 0.08 }, "visual": true,  "minScore": 35, "silencePenalty": 0.6 },
+    "GAMING":    { "label": "Gaming",      "weights": { "semantic": 0.15, "emotion": 0.25, "audio": 0.25, "visual": 0.20, "chat": 0.10, "narrative": 0.03, "standalone": 0.02 }, "visual": true,  "minScore": 35, "silencePenalty": 0.4 },
+    "DOMINO":    { "label": "Dominó",      "weights": { "semantic": 0.20, "emotion": 0.30, "audio": 0.25, "visual": 0.05, "chat": 0.05, "narrative": 0.10, "standalone": 0.05 }, "visual": false, "minScore": 35, "silencePenalty": 0.5, "lexicon": "domino" },
+    "PODCAST":   { "label": "Podcast",     "weights": { "semantic": 0.40, "emotion": 0.10, "audio": 0.08, "visual": 0.02, "chat": 0.0,  "narrative": 0.25, "standalone": 0.15 }, "visual": false, "minScore": 40, "silencePenalty": 0.8 },
+    "INTERVIEW": { "label": "Entrevistas", "weights": { "semantic": 0.40, "emotion": 0.08, "audio": 0.07, "visual": 0.05, "chat": 0.0,  "narrative": 0.25, "standalone": 0.15 }, "visual": false, "minScore": 40, "silencePenalty": 0.8 },
+    "REACTION":  { "label": "Reacciones",  "weights": { "semantic": 0.15, "emotion": 0.35, "audio": 0.25, "visual": 0.15, "chat": 0.05, "narrative": 0.03, "standalone": 0.02 }, "visual": true,  "minScore": 35, "silencePenalty": 0.4 },
+    "HUMOR":     { "label": "Humor",       "weights": { "semantic": 0.30, "emotion": 0.30, "audio": 0.15, "visual": 0.05, "chat": 0.05, "narrative": 0.10, "standalone": 0.05 }, "visual": false, "minScore": 35, "silencePenalty": 0.6 },
+    "EDUCATION": { "label": "Educación",   "weights": { "semantic": 0.45, "emotion": 0.05, "audio": 0.05, "visual": 0.05, "chat": 0.0,  "narrative": 0.25, "standalone": 0.15 }, "visual": false, "minScore": 40, "silencePenalty": 0.8 },
+    "SPORTS":    { "label": "Deportes",    "weights": { "semantic": 0.15, "emotion": 0.25, "audio": 0.25, "visual": 0.25, "chat": 0.05, "narrative": 0.03, "standalone": 0.02 }, "visual": true,  "minScore": 35, "silencePenalty": 0.4 },
+    "CUSTOM":    { "label": "Personalizado","weights": { "semantic": 0.30, "emotion": 0.20, "audio": 0.15, "visual": 0.10, "chat": 0.05, "narrative": 0.12, "standalone": 0.08 }, "visual": true,  "minScore": 30, "silencePenalty": 0.6 }
+  },
+  "durationPresets": {
+    "SHORT":  { "min": 15, "max": 30 },
+    "MEDIUM": { "min": 30, "max": 60 },
+    "LONG":   { "min": 60, "max": 180 }
+  }
+}

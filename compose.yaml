@@ -1,0 +1,230 @@
+# ClipMaster AI — despliegue con Docker Compose para Dokploy (perfil CPU).
+#
+# - Ningún servicio publica puertos: Traefik de Dokploy enruta el dominio a `web:3000` (/) y `api:4000` (/api).
+# - Sólo web y api se unen a `dokploy-network`; el resto vive en la red privada `backend`.
+# - GPU: añade `-f compose.gpu.yaml` (ver docs/DOKPLOY_DEPLOYMENT.md). Este archivo funciona sin GPU.
+# - Los secretos llegan por variables de entorno (Dokploy → Environment). Ver .env.example.
+
+name: clipmaster
+
+x-worker-env: &worker-env
+  REDIS_URL: redis://:${REDIS_PASSWORD:?REDIS_PASSWORD es obligatoria}@redis:6379
+  API_INTERNAL_URL: http://api:4000/api
+  INTERNAL_API_TOKEN: ${INTERNAL_API_TOKEN:?INTERNAL_API_TOKEN es obligatoria}
+  STORAGE_BACKEND: s3
+  S3_ENDPOINT: http://minio:9000
+  S3_REGION: ${S3_REGION:-us-east-1}
+  S3_ACCESS_KEY: ${MINIO_ROOT_USER:?MINIO_ROOT_USER es obligatoria}
+  S3_SECRET_KEY: ${MINIO_ROOT_PASSWORD:?MINIO_ROOT_PASSWORD es obligatoria}
+  S3_BUCKET: ${S3_BUCKET:-clipmaster}
+  LOG_LEVEL: ${WORKER_LOG_LEVEL:-INFO}
+  ALLOW_PRIVATE_NETWORKS: "false"
+
+x-worker: &worker
+  image: ${WORKER_IMAGE:-clipmaster-worker:latest}
+  build:
+    context: .
+    dockerfile: infrastructure/docker/worker.Dockerfile
+    args:
+      GPU: "0"
+  restart: unless-stopped
+  networks: [backend]
+  depends_on:
+    redis: { condition: service_healthy }
+    minio: { condition: service_healthy }
+  stop_grace_period: 60s
+  logging: &logging
+    driver: json-file
+    options: { max-size: "20m", max-file: "5" }
+
+services:
+  web:
+    build:
+      context: .
+      dockerfile: infrastructure/docker/web.Dockerfile
+      args:
+        API_INTERNAL_URL: http://api:4000
+    image: ${WEB_IMAGE:-clipmaster-web:latest}
+    restart: unless-stopped
+    networks: [backend, dokploy-network]
+    depends_on:
+      api: { condition: service_healthy }
+    logging: *logging
+
+  api:
+    build:
+      context: .
+      dockerfile: infrastructure/docker/api.Dockerfile
+    image: ${API_IMAGE:-clipmaster-api:latest}
+    restart: unless-stopped
+    networks: [backend, dokploy-network]
+    environment:
+      NODE_ENV: production
+      PORT: "4000"
+      PUBLIC_URL: ${PUBLIC_URL:?PUBLIC_URL es obligatoria (https://tu-dominio)}
+      DATABASE_URL: postgresql://${POSTGRES_USER:-clipmaster}:${POSTGRES_PASSWORD:?POSTGRES_PASSWORD es obligatoria}@postgres:5432/${POSTGRES_DB:-clipmaster}?schema=public
+      REDIS_URL: redis://:${REDIS_PASSWORD}@redis:6379
+      S3_ENDPOINT: http://minio:9000
+      S3_REGION: ${S3_REGION:-us-east-1}
+      S3_ACCESS_KEY: ${MINIO_ROOT_USER}
+      S3_SECRET_KEY: ${MINIO_ROOT_PASSWORD}
+      S3_BUCKET: ${S3_BUCKET:-clipmaster}
+      S3_FORCE_PATH_STYLE: "true"
+      SESSION_SECRET: ${SESSION_SECRET:?SESSION_SECRET es obligatoria}
+      MEDIA_SIGNING_SECRET: ${MEDIA_SIGNING_SECRET:?MEDIA_SIGNING_SECRET es obligatoria}
+      INTERNAL_API_TOKEN: ${INTERNAL_API_TOKEN}
+      CAPTURE_WORKER_URL: http://capture-worker:8000
+      COOKIE_SECURE: ${COOKIE_SECURE:-true}
+      ALLOW_REGISTRATION: ${ALLOW_REGISTRATION:-false}
+      ADMIN_EMAIL: ${ADMIN_EMAIL:-}
+      ADMIN_PASSWORD: ${ADMIN_PASSWORD:-}
+      MAX_UPLOAD_MB: ${MAX_UPLOAD_MB:-4096}
+      DEFAULT_QUOTA_GB: ${DEFAULT_QUOTA_GB:-50}
+      MAX_VIDEO_DURATION_SEC: ${MAX_VIDEO_DURATION_SEC:-14400}
+      MAX_LIVE_DURATION_SEC: ${MAX_LIVE_DURATION_SEC:-21600}
+      LIVE_SEGMENT_SECONDS: ${LIVE_SEGMENT_SECONDS:-60}
+      LIVE_CONTEXT_SECONDS: ${LIVE_CONTEXT_SECONDS:-20}
+      MAX_ACTIVE_PROJECTS_PER_USER: ${MAX_ACTIVE_PROJECTS_PER_USER:-3}
+      JOB_ATTEMPTS: ${JOB_ATTEMPTS:-3}
+      TEMP_RETENTION_HOURS: ${TEMP_RETENTION_HOURS:-48}
+      MEDIA_URL_TTL_SEC: ${MEDIA_URL_TTL_SEC:-3600}
+      RATE_LIMIT_PER_MINUTE: ${RATE_LIMIT_PER_MINUTE:-120}
+      SMTP_URL: ${SMTP_URL:-}
+      SMTP_FROM: ${SMTP_FROM:-ClipMaster AI <no-reply@localhost>}
+      LOG_LEVEL: ${API_LOG_LEVEL:-info}
+    volumes:
+      - api-uploads:/data/uploads
+    depends_on:
+      postgres: { condition: service_healthy }
+      redis: { condition: service_healthy }
+      minio: { condition: service_healthy }
+    logging: *logging
+
+  capture-worker:
+    <<: *worker
+    environment:
+      <<: *worker-env
+      WORKER_ROLE: capture
+      CONCURRENCY: ${CAPTURE_CONCURRENCY:-2}
+      IMPORT_MAX_HEIGHT: ${IMPORT_MAX_HEIGHT:-1080}
+      MAX_DOWNLOAD_MB: ${MAX_DOWNLOAD_MB:-8192}
+      LIVE_QUALITY: ${LIVE_QUALITY:-720p,720p60,best}
+      LIVE_MAX_RECONNECTS: ${LIVE_MAX_RECONNECTS:-6}
+    volumes:
+      - capture-work:/data/work
+
+  ai-worker:
+    <<: *worker
+    environment:
+      <<: *worker-env
+      WORKER_ROLE: ai
+      CONCURRENCY: "1"
+      DEVICE: ${AI_DEVICE:-cpu}
+      WHISPER_MODEL: ${WHISPER_MODEL:-small}
+      WHISPER_COMPUTE_TYPE: ${WHISPER_COMPUTE_TYPE:-auto}
+      WHISPER_BEAM_SIZE: ${WHISPER_BEAM_SIZE:-1}
+      WHISPER_CPU_THREADS: ${WHISPER_CPU_THREADS:-6}
+      VISUAL_FPS: ${VISUAL_FPS:-2}
+      LLM_PROVIDER: ${LLM_PROVIDER:-ollama}
+      OLLAMA_URL: ${OLLAMA_URL:-}
+      OLLAMA_MODEL: ${OLLAMA_MODEL:-qwen2.5:3b-instruct}
+      NVIDIA_API_KEY: ${NVIDIA_API_KEY:-}
+      NVIDIA_BASE_URL: ${NVIDIA_BASE_URL:-https://integrate.api.nvidia.com/v1}
+      NVIDIA_MODEL: ${NVIDIA_MODEL:-meta/llama-3.3-70b-instruct}
+    volumes:
+      - ai-work:/data/work
+      - models:/models
+
+  render-worker:
+    <<: *worker
+    environment:
+      <<: *worker-env
+      WORKER_ROLE: render
+      CONCURRENCY: ${RENDER_CONCURRENCY:-1}
+      DEVICE: cpu
+      RENDER_ENCODER: ${RENDER_ENCODER:-libx264}
+      RENDER_PRESET: ${RENDER_PRESET:-veryfast}
+      RENDER_CRF: ${RENDER_CRF:-20}
+      FFMPEG_THREADS: ${FFMPEG_THREADS:-0}
+    volumes:
+      - render-work:/data/work
+
+  postgres:
+    image: postgres:17-alpine
+    restart: unless-stopped
+    networks: [backend]
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-clipmaster}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      POSTGRES_DB: ${POSTGRES_DB:-clipmaster}
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+    logging: *logging
+
+  redis:
+    image: redis:7.4-alpine
+    restart: unless-stopped
+    networks: [backend]
+    # BullMQ exige maxmemory-policy=noeviction; AOF para no perder la cola en reinicios.
+    command: ["redis-server", "--appendonly", "yes", "--maxmemory-policy", "noeviction", "--requirepass", "${REDIS_PASSWORD}"]
+    environment:
+      REDISCLI_AUTH: ${REDIS_PASSWORD}
+    volumes:
+      - redisdata:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+    logging: *logging
+
+  minio:
+    # MinIO dejó de publicar imágenes comunitarias nuevas; se fija una versión publicada (sobrescribible).
+    image: ${MINIO_IMAGE:-minio/minio:RELEASE.2025-04-22T22-12-26Z}
+    restart: unless-stopped
+    networks: [backend]
+    command: ["server", "/data"]
+    environment:
+      MINIO_ROOT_USER: ${MINIO_ROOT_USER}
+      MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD}
+      MINIO_BROWSER: "off"
+    volumes:
+      - miniodata:/data
+    healthcheck:
+      test: ["CMD", "mc", "ready", "local"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+    logging: *logging
+
+  # LLM local opcional: `docker compose --profile llm up` y OLLAMA_URL=http://ollama:11434
+  ollama:
+    image: ${OLLAMA_IMAGE:-ollama/ollama:0.12.6}
+    profiles: [llm]
+    restart: unless-stopped
+    networks: [backend]
+    volumes:
+      - ollama:/root/.ollama
+    logging: *logging
+
+networks:
+  backend:
+    driver: bridge
+  dokploy-network:
+    external: true
+
+volumes:
+  pgdata:
+  redisdata:
+  miniodata:
+  models:
+  api-uploads:
+  capture-work:
+  ai-work:
+  render-work:
+  ollama:
