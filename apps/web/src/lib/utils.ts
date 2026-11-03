@@ -38,7 +38,8 @@ export function formatDate(iso: string | null | undefined): string {
 }
 
 export function relativeTime(iso: string): string {
-  const diff = (Date.now() - new Date(iso).getTime()) / 1000;
+  // Un desfase de reloj con el servidor no debe mostrar fechas «en el futuro».
+  const diff = Math.max(0, (Date.now() - new Date(iso).getTime()) / 1000);
   const rtf = new Intl.RelativeTimeFormat('es', { numeric: 'auto' });
   if (diff < 60) return rtf.format(-Math.round(diff), 'second');
   if (diff < 3600) return rtf.format(-Math.round(diff / 60), 'minute');
