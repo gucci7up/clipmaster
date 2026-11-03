@@ -15,6 +15,6 @@ numpy==2.5.4
 # OpenCV 5 eliminó CascadeClassifier (detector Haar incluido); se usa la rama 4.x mantenida.
 opencv-python-headless==4.14.0.94
 # Captura
-yt-dlp==2026.10.26
+yt-dlp[default]==2026.10.26
 streamlink==8.6.3
 av==18.1.0  # faster-whisper 1.2.1 usa av.open(metadata_errors=...) eliminado en PyAV 19

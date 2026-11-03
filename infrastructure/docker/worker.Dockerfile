@@ -16,6 +16,9 @@ RUN apt-get update \
  && if [ "$INSTALL_TEST_TOOLS" = "1" ]; then apt-get install -y --no-install-recommends espeak-ng; fi \
  && rm -rf /var/lib/apt/lists/*
 
+# Deno: runtime JavaScript que yt-dlp necesita para resolver los retos de YouTube (yt-dlp EJS).
+COPY --from=denoland/deno:bin-2.9.7 /deno /usr/local/bin/deno
+
 WORKDIR /app
 COPY services/worker/requirements.txt services/worker/requirements-dev.txt ./
 RUN pip install -r requirements.txt \
