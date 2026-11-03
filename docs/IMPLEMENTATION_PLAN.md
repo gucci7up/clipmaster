@@ -70,6 +70,8 @@ Leyenda:
 |----------|--------|
 | Fusión audio + visual + texto con pesos por modo | ✅ |
 | LLM opcional: Ollama local o API de NVIDIA (JSON validado) | 🟡 ambos proveedores probados con respuestas HTTP simuladas; sin llamada real (no hay clave ni Ollama en desarrollo) |
+| Análisis con fotogramas (Nemotron Omni de NVIDIA, opcional) | ✅ probado con la API real |
+| Render con IA de NVIDIA: mirada a cámara, iluminación, voz del gancho, portada (opcional) | ✅ probado con la API real en local; pendiente de verificar en producción |
 | Señal de chat de directos | ⬜ no implementada; su peso se redistribuye |
 | Diarización de hablantes | ⬜ |
 

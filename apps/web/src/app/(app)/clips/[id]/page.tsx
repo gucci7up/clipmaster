@@ -1,7 +1,7 @@
 'use client';
 
-import { DEFAULT_SUBTITLE_STYLE } from '@clipmaster/shared';
-import type { AspectRatio, SubtitleStyle } from '@clipmaster/shared';
+import { DEFAULT_SUBTITLE_STYLE, HOOK_VOICES, RELIGHT_PRESETS } from '@clipmaster/shared';
+import type { AiFeature, AspectRatio, SubtitleStyle } from '@clipmaster/shared';
 import { ArrowLeft, Download, Loader2, RefreshCw, Save, Trash2 } from 'lucide-react';
 import Link from 'next/link';
 import { useParams, useRouter } from 'next/navigation';
@@ -31,13 +31,20 @@ interface Draft {
   hookEnabled: boolean;
   hookText: string;
   hookDuration: number;
+  aiEyeContact: boolean;
+  aiRelight: number | null;
+  hookVoice: string;
+  coverPrompt: string;
 }
+
+const AI_LABELS: Record<AiFeature, string> = { eyeContact: 'Mirada a cámara', relight: 'Iluminación', hookVoice: 'Voz del gancho', cover: 'Portada' };
 
 function draftOf(c: Clip): Draft {
   return {
     title: c.title, start: c.start, end: c.end, aspect: c.aspect, subtitles: c.subtitles,
     subtitleStyle: { ...DEFAULT_SUBTITLE_STYLE, ...c.subtitleStyle }, reframeMode: c.reframeMode, manualX: c.manualX ?? 0.5,
     hookEnabled: c.hookEnabled, hookText: c.hookText ?? '', hookDuration: c.hookDuration,
+    aiEyeContact: c.aiEyeContact, aiRelight: c.aiRelight, hookVoice: c.hookVoice ?? '', coverPrompt: c.coverPrompt ?? '',
   };
 }
 
@@ -48,6 +55,7 @@ export default function ClipEditorPage() {
     refreshInterval: (c) => (c && (c.status === 'PENDING' || c.status === 'RENDERING') ? 4000 : 0),
   });
   const { data: project } = useSWR<ProjectDetail>(clip ? `/projects/${clip.projectId}` : null);
+  const { data: settings } = useSWR<{ ai: { aiMedia: boolean }; aiMediaAvailable: boolean }>('/settings');
   const [d, setD] = useState<Draft | null>(null);
   const [saving, setSaving] = useState(false);
   const sourceRef = useRef<HTMLVideoElement>(null);
@@ -86,6 +94,8 @@ export default function ClipEditorPage() {
             start: merged ? undefined : d.start,
             end: merged ? undefined : d.end,
             hookText: d.hookText.trim() || null,
+            hookVoice: d.hookVoice || null,
+            coverPrompt: d.coverPrompt.trim() || null,
             manualX: d.reframeMode === 'manual' ? d.manualX : null,
             manualY: null,
           },
@@ -236,6 +246,7 @@ export default function ClipEditorPage() {
               </div>
             </CardContent>
           </Card>
+          <AiEffects clip={clip} d={d} set={set} enabled={!!settings?.ai.aiMedia} available={!!settings?.aiMediaAvailable} />
           <div className="grid grid-cols-2 gap-2">
             <Button variant="outline" disabled={!dirty || !!invalid || saving} onClick={() => save(false)}><Save /> Guardar</Button>
             <Button disabled={!!invalid || saving || rendering} loading={saving} onClick={() => save(true)}><RefreshCw /> {dirty ? 'Guardar y regenerar' : 'Regenerar'}</Button>
@@ -256,6 +267,72 @@ export default function ClipEditorPage() {
         </div>
       </div>
     </>
+  );
+}
+
+/**
+ * Funciones de IA de NVIDIA del clip: sólo editables si el usuario las activó en Ajustes. Se aplican al regenerar;
+ * si alguna falla el clip se entrega sin ella y aquí se muestra el motivo.
+ */
+function AiEffects({ clip, d, set, enabled, available }: {
+  clip: Clip; d: Draft; set: <K extends keyof Draft>(k: K, v: Draft[K]) => void; enabled: boolean; available: boolean;
+}) {
+  const status = clip.currentRender?.aiStatus ?? null;
+  const used = d.aiEyeContact || d.aiRelight != null || !!d.hookVoice || !!d.coverPrompt.trim();
+  if (!enabled && !used && !status) {
+    return (
+      <Card>
+        <CardHeader><CardTitle>Efectos IA (NVIDIA)</CardTitle></CardHeader>
+        <CardContent className="text-xs text-muted-foreground">
+          {available ? <>Actívalos en <Link href="/ajustes" className="underline">Ajustes → Funciones de IA de NVIDIA</Link>: mirada a cámara, iluminación, voz del gancho y portada.</> : 'No disponibles: el administrador no ha configurado la clave de NVIDIA.'}
+        </CardContent>
+      </Card>
+    );
+  }
+  return (
+    <Card>
+      <CardHeader><CardTitle>Efectos IA (NVIDIA)</CardTitle></CardHeader>
+      <CardContent className="space-y-4">
+        {!enabled && <p className="text-xs text-destructive">Desactivados en Ajustes: no se aplicarán al regenerar.</p>}
+        <label className="flex items-center justify-between gap-4 text-sm"><span>Mirada a cámara<span className="block text-xs text-muted-foreground">Corrige los ojos para que miren a la cámara.</span></span><Switch checked={d.aiEyeContact} onCheckedChange={(v) => set('aiEyeContact', v)} disabled={!enabled && !d.aiEyeContact} label="Mirada a cámara" /></label>
+        <div className="space-y-1">
+          <Label htmlFor="relight">Iluminación</Label>
+          <Select id="relight" value={d.aiRelight == null ? '' : String(d.aiRelight)} disabled={!enabled && d.aiRelight == null} onChange={(e) => set('aiRelight', e.target.value === '' ? null : Number(e.target.value))}>
+            <option value="">Ninguna</option>
+            {RELIGHT_PRESETS.map((p, i) => <option key={p} value={i}>{p}</option>)}
+          </Select>
+        </div>
+        <div className="space-y-1">
+          <Label htmlFor="voice">Voz del título gancho</Label>
+          <Select id="voice" value={d.hookVoice} disabled={!d.hookEnabled || (!enabled && !d.hookVoice)} onChange={(e) => set('hookVoice', e.target.value)}>
+            <option value="">Ninguna</option>
+            {HOOK_VOICES.map((v) => <option key={v.id} value={v.id}>{v.label}</option>)}
+          </Select>
+          {!d.hookEnabled && <p className="text-xs text-muted-foreground">Activa el título gancho para que una voz lo lea.</p>}
+        </div>
+        <div className="space-y-1">
+          <Label htmlFor="cover">Portada generada</Label>
+          <Input id="cover" maxLength={600} placeholder="Describe la imagen (p. ej. mesa de dominó al atardecer)" value={d.coverPrompt} disabled={!enabled && !d.coverPrompt} onChange={(e) => set('coverPrompt', e.target.value)} />
+        </div>
+        {clip.coverUrl && (
+          <div className="flex items-end gap-3">
+            <img src={clip.coverUrl} alt="Portada generada" className="max-h-40 rounded-lg border" />
+            {clip.coverDownloadUrl && <Button size="sm" variant="outline" asChild><a href={clip.coverDownloadUrl}><Download /> Portada</a></Button>}
+          </div>
+        )}
+        {status && (
+          <ul className="space-y-1 border-t pt-3 text-xs">
+            {(Object.keys(status) as AiFeature[]).map((k) => (
+              <li key={k} className="flex justify-between gap-2">
+                <span>{AI_LABELS[k] ?? k}</span>
+                <span className={status[k]?.status === 'ok' ? 'text-emerald-600' : 'text-destructive'}>{status[k]?.status === 'ok' ? 'Aplicado' : `Falló: ${status[k]?.error ?? 'error'}`}</span>
+              </li>
+            ))}
+          </ul>
+        )}
+        <p className="text-xs text-muted-foreground">Se aplican al regenerar. Los tramos de video, el texto del gancho y la descripción se envían a NVIDIA.</p>
+      </CardContent>
+    </Card>
   );
 }
 

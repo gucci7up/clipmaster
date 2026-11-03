@@ -1,6 +1,6 @@
 # Pipeline de IA
 
-Todo se ejecuta en el propio servidor. La única excepción opcional es el paso LLM: puede usar Ollama (local) o la API de NVIDIA (build.nvidia.com, externa). Los dos vienen desactivados: el administrador tiene que configurar el proveedor y cada usuario activarlo en *Ajustes*.
+Todo se ejecuta en el propio servidor. Las excepciones son opcionales: el paso LLM (Ollama local o la API de NVIDIA, externa), el análisis con fotogramas y las funciones de IA de NVIDIA en el render. Todas vienen desactivadas: el administrador tiene que configurar la clave y cada usuario activarlas en *Ajustes*.
 
 Código: `services/worker/clipmaster_worker/` (`analysis.py` orquesta los pasos).
 
@@ -101,6 +101,23 @@ Los pesos de cada modo están en `packages/shared/config/modes.json`, el único 
   - si responde 401, 402, 403 o 429 (clave inválida, sin créditos o límite de peticiones), se dejan de hacer llamadas en ese análisis y el resto de candidatos conserva la puntuación local;
   - las respuestas que no son JSON válido o no cumplen el esquema se descartan; se toleran los bloques ```json;
   - `NVIDIA_BASE_URL` permite apuntar a un NIM autoalojado compatible con OpenAI.
+- **Análisis visual con IA** (`visionLLM`, opcional): si el usuario lo activa y el proveedor es NVIDIA, cada llamada incluye además 3 fotogramas JPEG de 448 px del candidato y usa `NVIDIA_VISION_MODEL` (Nemotron 3 Nano Omni). Probado con la API real.
+
+### Funciones de IA de NVIDIA en el render (opcionales)
+
+Las aplica el render-worker sólo si el administrador configuró `NVIDIA_API_KEY` en él y el usuario activó «Funciones de IA de NVIDIA» en *Ajustes*. Cada clip las elige en su editor:
+
+| Función | Servicio de NVIDIA | Qué se envía |
+|---|---|---|
+| Mirada a cámara | Maxine Eye Contact (gRPC, `grpc.nvcf.nvidia.com`) | el tramo del clip (H.264, ≤1080p) |
+| Iluminación (5 presets) | Maxine Relighting (gRPC) | el tramo del clip |
+| Voz del título gancho | Magpie TTS multilingüe, voces es-US | el texto del gancho |
+| Portada | FLUX.2 klein 4B (Apache 2.0) | la descripción escrita por el usuario |
+
+- Los efectos de video se aplican antes de recortar y subtitular; entre uno y otro se normaliza a fotogramas constantes porque Relighting rechaza video de fotogramas variables. Desfase medido de audio y video: 0–1 fotograma.
+- La voz se mezcla sobre el audio original (bajado al 30 % mientras habla).
+- Si una función falla (sin créditos, límite, error del servicio), el clip se entrega sin ella y `ClipRender.aiStatus` guarda el motivo, que el editor muestra.
+- **No integrado:** detección de hablante activo (necesita diarización y el Parakeet alojado no la devuelve), Chatterbox (redundante con Magpie), FLUX.1 schnell (no responde), Stable Diffusion 3.5 (sólo descargable y no comercial), Cosmos y Wan (no disponibles con esta clave). Generar video con IA no está disponible.
 
 ### Modo Dominó
 

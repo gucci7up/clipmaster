@@ -4,9 +4,9 @@
 
 | Suite | Comando | Resultado |
 |-------|---------|-----------|
-| Worker (unitarias + e2e real + proveedores LLM simulados) | `cd services/worker && .venv/Scripts/python -m pytest -q` | **91 passed** |
+| Worker (unitarias + e2e real + proveedores LLM simulados) | `cd services/worker && .venv/Scripts/python -m pytest -q` | **103 passed**, 2 omitidas (NVIDIA real) |
 | API (unitarias) | `pnpm --filter @clipmaster/api test` | **23 passed** (la integración se omite sin BD) |
-| API (integración con PostgreSQL 17 real) | `TEST_DATABASE_URL=postgresql://… pnpm --filter @clipmaster/api test` | **42 passed** |
+| API (integración con PostgreSQL 17 real) | `TEST_DATABASE_URL=postgresql://… pnpm --filter @clipmaster/api test` | **43 passed** |
 | Compartido | `pnpm --filter @clipmaster/shared test` | **13 passed** |
 | Web (utilidades) | `pnpm --filter @clipmaster/web test` | **3 passed** |
 | Tipos | `pnpm -r typecheck` | sin errores |
@@ -69,7 +69,8 @@ TEST_DATABASE_URL=... pnpm --filter @clipmaster/api test
 - **La interoperabilidad BullMQ Node ↔ Python con Redis real.** El protocolo se basa en la lectura del código fuente de ambas bibliotecas (mismo prefijo, nombres de cola, `jobId` y formato de datos), sin una prueba de ejecución conjunta.
 - **CUDA y NVENC en la T400 o la GTX 1080 Ti.** La detección y el retorno a CPU están implementados y probados en modo CPU; el camino GPU no se ha ejecutado en ese hardware.
 - **Descargas reales de YouTube, Twitch, Kick y TikTok, y capturas de directos.** Dependen de la red y de las plataformas, así que no forman parte de la batería automática.
-- **Llamadas reales a la API de NVIDIA o a Ollama.** `tests/test_llm_providers.py` cubre la petición, la autenticación, el parseo, el rechazo de JSON inválido y la parada ante 401/402/403/429, pero con `httpx.MockTransport`.
+- **Las funciones de NVIDIA, con la API real, sólo en local:** `NVIDIA_LIVE_TESTS=1 NVIDIA_API_KEY=… NVIDIA_LIVE_VIDEO=<mp4 con una cara> pytest tests/test_nvidia_live.py` renderiza un clip con mirada, iluminación, voz y portada, y analiza con fotogramas (2 passed el 2026-11-03). No se ejecuta en CI porque consume créditos.
+- **Llamadas reales a Ollama.** `tests/test_llm_providers.py` cubre la petición, la autenticación, el parseo, el rechazo de JSON inválido y la parada ante 401/402/403/429, pero con `httpx.MockTransport`.
 - **El frontend en navegador.** Compila, pasa el typecheck y genera las 13 rutas, pero no se ha ejecutado contra una API en marcha.
 
 ## Verificación tras desplegar

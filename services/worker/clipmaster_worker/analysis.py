@@ -9,7 +9,7 @@ from pathlib import Path
 from . import audio_signals, scoring, semantic, transcribe, visual_signals
 from .context import JobContext
 from .contracts import AnalyzeJobData
-from .media import concat_sources, extract_audio, probe
+from .media import MediaError, concat_sources, extract_audio, probe, run_ffmpeg
 from .storage import join_key
 from .subtitles import build_srt
 
@@ -135,7 +135,11 @@ def run_analysis(ctx: JobContext, job: AnalyzeJobData) -> dict:
     # 7) LLM opcional sobre los mejores candidatos
     if job.settings.semanticLLM and segments and semantic.llm_available(s):
         with ctx.timed("llm"):
-            cands, modules["semantic_llm"] = apply_llm(ctx, sig, cfg, cands, job.mode)
+            grab = None
+            if job.settings.visionLLM and info.has_video and semantic.vision_available(s):
+                grab = lambda a, b: candidate_frames(ctx, src, a - src_origin, b - src_origin)  # noqa: E731
+            modules["vision_llm"] = "ok" if grab else ("skipped" if not job.settings.visionLLM else "unavailable")
+            cands, modules["semantic_llm"] = apply_llm(ctx, sig, cfg, cands, job.mode, grab)
     else:
         modules["semantic_llm"] = "skipped" if not job.settings.semanticLLM else "unavailable"
 
@@ -169,8 +173,24 @@ def run_analysis(ctx: JobContext, job: AnalyzeJobData) -> dict:
     }
 
 
+def candidate_frames(ctx: JobContext, src: str, start: float, end: float, count: int = 3) -> list[bytes]:
+    """Fotogramas JPEG (448 px de ancho) repartidos dentro del candidato, para el modelo de visión."""
+    frames: list[bytes] = []
+    span = max(0.1, end - start)
+    for i in range(count):
+        t = max(0.0, start + span * (i + 1) / (count + 1))
+        out = ctx.workdir / f"vision_{i}.jpg"
+        try:
+            run_ffmpeg(["-ss", f"{t:.3f}", "-i", src, "-frames:v", "1", "-vf", "scale=448:-2", "-q:v", "4", str(out)],
+                       timeout=60)
+            frames.append(out.read_bytes())
+        except (MediaError, OSError) as exc:
+            log.warning("No se pudo extraer el fotograma %.1fs: %s", t, exc)
+    return frames
+
+
 def apply_llm(ctx: JobContext, sig: scoring.Signals, cfg: scoring.ScoringConfig, cands: list[scoring.Candidate],
-              mode: str) -> tuple[list[scoring.Candidate], str]:
+              mode: str, grab_frames=None) -> tuple[list[scoring.Candidate], str]:
     """Re-puntúa los mejores candidatos con el LLM. Devuelve los candidatos y el estado del módulo:
     "ok" si al menos un veredicto fue válido y "failed" si ninguno lo fue. Si el proveedor deja de estar
     disponible (cuota, clave), los candidatos restantes conservan su puntuación local."""
@@ -184,7 +204,8 @@ def apply_llm(ctx: JobContext, sig: scoring.Signals, cfg: scoring.ScoringConfig,
             ctx.progress("semantic", i / max(1, min(limit, len(cands))), "Evaluando con LLM")
             attempted += 1
             try:
-                verdict = semantic.llm_judge(ctx.settings, c.text, mode)
+                frames = grab_frames(c.start, c.end) if grab_frames else None
+                verdict = semantic.llm_judge(ctx.settings, c.text, mode, frames or None)
             except semantic.LLMUnavailable as exc:
                 log.warning("LLM no disponible, se continúa con la puntuación local: %s", exc)
                 stopped, verdict = True, None

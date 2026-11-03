@@ -1,10 +1,14 @@
-"""Render de clips con FFmpeg: recorte temporal, reencuadre, subtítulos ASS, MP4 H.264/AAC y miniatura."""
+"""Render de clips con FFmpeg: recorte temporal, reencuadre, subtítulos ASS, MP4 H.264/AAC y miniatura.
+
+Opcionalmente aplica funciones de IA de NVIDIA (mirada a cámara, iluminación, voz del gancho y portada);
+si una falla, el clip se entrega sin ella y el resultado indica qué falló."""
 
 from __future__ import annotations
 
 import logging
 from pathlib import Path
 
+from . import nvidia_media as nv
 from .context import JobContext
 from .contracts import ASPECT_SIZES, RenderJobData, Word
 from .devices import resolve_encoder
@@ -48,8 +52,47 @@ def _fonts(ctx: JobContext, job: RenderJobData) -> str | None:
     return "fonts"
 
 
+def _ai_video(ctx: JobContext, job: RenderJobData, src: str, rel_start: float, duration: float, tag: str,
+              status: dict[str, dict]) -> str | None:
+    """Aplica mirada a cámara y/o iluminación de NVIDIA al tramo. Devuelve el archivo procesado o None."""
+    ai = job.ai
+    if not ai or not (ai.eyeContact or ai.relight is not None):
+        return None
+    steps = []
+    if ai.eyeContact:
+        steps.append(("eyeContact", "Mirada a cámara (NVIDIA)", lambda p, o: nv.eye_contact(ctx.settings, p, o)))
+    if ai.relight is not None:
+        steps.append(("relight", "Iluminación IA (NVIDIA)", lambda p, o: nv.relight(ctx.settings, p, o, ai.relight)))
+    # En clips combinados no se reintenta en los demás tramos un efecto que ya falló.
+    steps = [st for st in steps if status.get(st[0], {}).get("status") != "failed"]
+    if not steps:
+        return None
+    fps = probe(src).fps or 30.0
+    current = nv.prepare_segment(src, rel_start, duration, ctx.workdir / f"ai_in{tag}.mp4", fps=fps, cancel=ctx.is_cancelled)
+    changed = False
+    for name, label, fn in steps:
+        ctx.progress("render", None, label, force=True)
+        try:
+            if changed:  # la salida del efecto anterior puede ser VFR: se normaliza antes del siguiente
+                current = nv.prepare_segment(str(current), 0.0, duration, ctx.workdir / f"ai_cfr_{name}{tag}.mp4", fps=fps,
+                                             cancel=ctx.is_cancelled)
+            processed = fn(current, ctx.workdir / f"ai_{name}{tag}.mp4")
+            info = probe(str(processed))
+            if not info.has_video or abs(info.duration - duration) > max(1.0, duration * 0.1):
+                raise nv.NvidiaMediaError(f"{label}: duración inesperada ({info.duration:.1f}s)")
+            current, changed = processed, True
+            status[name] = {"status": "ok"}
+        except Exception as exc:  # noqa: BLE001
+            if exc.__class__.__name__ == "JobCancelled":
+                raise
+            log.warning("%s falló; el clip sigue sin el efecto: %s", label, exc)
+            status[name] = {"status": "failed", "error": nv.wrap_media_error(exc)}
+    return str(current) if changed else None
+
+
 def _render_piece(ctx: JobContext, job: RenderJobData, start: float, end: float, out: Path, ass_name: str | None,
-                  fonts_dir: str | None, encoder: str, lo: float, hi: float, tag: str = "") -> tuple[str, str]:
+                  fonts_dir: str | None, encoder: str, lo: float, hi: float, tag: str = "",
+                  status: dict[str, dict] | None = None, voice: Path | None = None) -> tuple[str, str]:
     """Corta [start, end] de la línea de tiempo del proyecto, lo reencuadra y quema los subtítulos."""
     s = ctx.settings
     src, origin = _render_input(ctx, job, start, end, tag)
@@ -58,6 +101,10 @@ def _render_piece(ctx: JobContext, job: RenderJobData, start: float, end: float,
         raise MediaError("La fuente no tiene video")
     rel_start = max(0.0, start - origin)
     duration = end - start
+    processed = _ai_video(ctx, job, src, rel_start, duration, tag, status if status is not None else {})
+    if processed:
+        src, rel_start = processed, 0.0
+        info = probe(src)
     target_w, target_h = ASPECT_SIZES[job.aspect]
 
     # Trayectoria del sujeto para el reencuadre automático (sobre el propio tramo).
@@ -84,11 +131,23 @@ def _render_piece(ctx: JobContext, job: RenderJobData, start: float, end: float,
         vf.append(f"ass={ass_name}" + (f":fontsdir={fonts_dir}" if fonts_dir else ""))
     vf.append("format=yuv420p")
 
-    args = ["-ss", f"{rel_start:.3f}", "-i", src, "-t", f"{duration:.3f}",
-            "-map", "0:v:0", "-map", "0:a:0?", "-vf", ",".join(vf),
-            *encoder_args(encoder, s.render_preset, s.render_crf),
+    args = ["-ss", f"{rel_start:.3f}", "-t", f"{duration:.3f}", "-i", src]
+    if voice:
+        # Voz del gancho: se mezcla al inicio y el audio original baja mientras suena.
+        voice_len = probe(str(voice)).duration or 0.0
+        args += ["-i", str(voice)]
+        vo = "[1:a]aresample=48000,adelay=150:all=1"
+        audio = (f"[0:a]volume=0.3:enable='lt(t,{voice_len + 0.3:.2f})'[bg];{vo}[vo];"
+                 "[bg][vo]amix=inputs=2:duration=first:normalize=0[a]"
+                 if info.has_audio else f"{vo},apad[a]")
+        args += ["-filter_complex", f"[0:v]{','.join(vf)}[v];{audio}", "-map", "[v]", "-map", "[a]"]
+    else:
+        args += ["-map", "0:v:0", "-map", "0:a:0?", "-vf", ",".join(vf)]
+    args += [*encoder_args(encoder, s.render_preset, s.render_crf),
             "-c:a", "aac", "-b:a", "160k", "-ac", "2", "-ar", "48000",
             "-movflags", "+faststart", "-avoid_negative_ts", "make_zero"]
+    if voice:
+        args += ["-t", f"{duration:.3f}"]
     if s.ffmpeg_threads:
         args += ["-threads", str(s.ffmpeg_threads)]
     args.append(str(out))
@@ -139,13 +198,17 @@ def run_render(ctx: JobContext, job: RenderJobData) -> dict:
         (ctx.workdir / full_ass).write_text(ass, encoding="utf-8")
         subtitle_key = join_key(job.outputPrefix.replace("clips/", "subtitles/", 1), f"{job.renderId}.ass")
 
+    ai_status: dict[str, dict] = {}
+    voice = _hook_voice(ctx, job, hook, ai_status)
+
     encoder = resolve_encoder(s)
     out = ctx.workdir / "clip.mp4"
     reframe_mode = job.reframe.mode
     ctx.progress("render", 0.02, "Renderizando", force=True)
     with ctx.timed("render"):
         if len(pieces) == 1:
-            encoder, reframe_mode = _render_piece(ctx, job, *pieces[0], out, full_ass if want_ass else None, fonts_dir, encoder, 0.0, 0.95)
+            encoder, reframe_mode = _render_piece(ctx, job, *pieces[0], out, full_ass if want_ass else None, fonts_dir, encoder,
+                                                  0.0, 0.95, status=ai_status, voice=voice)
         else:
             parts: list[str] = []
             offset = 0.0
@@ -161,7 +224,8 @@ def run_render(ctx: JobContext, job: RenderJobData) -> dict:
                 part = ctx.workdir / f"part_{i}.mp4"
                 lo = 0.95 * i / len(pieces)
                 encoder, reframe_mode = _render_piece(ctx, job, a, b, part, ass_name, fonts_dir, encoder, lo,
-                                                      0.95 * (i + 1) / len(pieces), tag=f"_{i}")
+                                                      0.95 * (i + 1) / len(pieces), tag=f"_{i}", status=ai_status,
+                                                      voice=voice if i == 0 else None)
                 parts.append(str(part))
                 offset += b - a
             # Mismo códec, resolución y parámetros en todas las partes: se unen sin recodificar.
@@ -182,6 +246,7 @@ def run_render(ctx: JobContext, job: RenderJobData) -> dict:
     ctx.storage.upload(thumb, thumb_key, "image/jpeg")
     if subtitle_key:
         ctx.storage.upload(ctx.workdir / full_ass, subtitle_key, "text/x-ssa")
+    cover_key = _cover(ctx, job, ai_status)
     ctx.progress("render", 1.0, "Clip listo", force=True)
     return {
         "outputKey": out_key,
@@ -194,4 +259,38 @@ def run_render(ctx: JobContext, job: RenderJobData) -> dict:
         "encoder": encoder,
         "hasAudio": result.has_audio,
         "reframe": reframe_mode,
+        "coverKey": cover_key,
+        "ai": ai_status or None,
     }
+
+
+def _hook_voice(ctx: JobContext, job: RenderJobData, hook: str | None, status: dict[str, dict]) -> Path | None:
+    """Locución del título gancho con la voz elegida (Magpie TTS). None si no se pidió o falló."""
+    if not (job.ai and job.ai.hookVoice and hook):
+        return None
+    ctx.progress("render", None, "Generando voz del gancho (NVIDIA)", force=True)
+    try:
+        path = nv.synthesize(ctx.settings, hook, job.ai.hookVoice, ctx.workdir / "hook_voice.wav")
+    except nv.NvidiaMediaError as exc:
+        log.warning("Voz del gancho falló; el clip sigue sin ella: %s", exc)
+        status["hookVoice"] = {"status": "failed", "error": nv.wrap_media_error(exc)}
+        return None
+    status["hookVoice"] = {"status": "ok"}
+    return path
+
+
+def _cover(ctx: JobContext, job: RenderJobData, status: dict[str, dict]) -> str | None:
+    """Portada generada con FLUX.2 klein a partir del prompt del usuario. None si no se pidió o falló."""
+    if not (job.ai and job.ai.coverPrompt):
+        return None
+    ctx.progress("render", 0.97, "Generando portada (NVIDIA)", force=True)
+    try:
+        path = nv.cover_image(ctx.settings, job.ai.coverPrompt, job.aspect, ctx.workdir / "cover.jpg")
+    except nv.NvidiaMediaError as exc:
+        log.warning("Portada IA falló: %s", exc)
+        status["cover"] = {"status": "failed", "error": nv.wrap_media_error(exc)}
+        return None
+    key = join_key(job.outputPrefix.replace("clips/", "covers/", 1), f"{job.renderId}.jpg")
+    ctx.storage.upload(path, key, "image/jpeg")
+    status["cover"] = {"status": "ok"}
+    return key

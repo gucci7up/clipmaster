@@ -140,6 +140,41 @@ run('editor de clips (PostgreSQL real)', () => {
     expect(queues.renders().every((j) => j.subtitles.style.preset === 'podcast' && j.subtitles.style.fontSize === 64)).toBe(true);
   });
 
+  it('las funciones de NVIDIA sólo viajan al render si el usuario las activó, y se guarda su resultado', async () => {
+    const { rows } = await analysedProject();
+    await prisma.clipRender.updateMany({ where: { clipId: rows[0].id }, data: { status: 'READY' } });
+    await expect(clips.update(userId, rows[0].id, { aiRelight: 7 })).rejects.toThrow('Iluminación');
+    await expect(clips.update(userId, rows[0].id, { hookVoice: 'Magpie-Multilingual.EN-US.Aria' })).rejects.toThrow('Voz');
+    await clips.update(userId, rows[0].id, {
+      aiEyeContact: true, aiRelight: 2, hookVoice: 'Magpie-Multilingual.ES-US.Isabela', coverPrompt: '  cancha   de noche ',
+    });
+
+    // Sin el permiso del usuario (AISettings.aiMedia) no se envía nada a NVIDIA.
+    await pipeline.enqueueRender(rows[0].id);
+    expect(queues.renders().at(-1)!.ai).toBeNull();
+
+    await prisma.aISettings.upsert({ where: { userId }, create: { userId, aiMedia: true }, update: { aiMedia: true } });
+    const render = await pipeline.enqueueRender(rows[0].id);
+    const job = queues.renders().at(-1)!;
+    expect(job.ai).toEqual({ eyeContact: true, relight: 2, hookVoice: 'Magpie-Multilingual.ES-US.Isabela', coverPrompt: 'cancha de noche' });
+
+    // Sin título gancho no hay voz del gancho.
+    await clips.update(userId, rows[0].id, { hookEnabled: false });
+    await pipeline.enqueueRender(rows[0].id);
+    expect(queues.renders().at(-1)!.ai?.hookVoice).toBeNull();
+
+    await pipeline.onStart(job.jobId);
+    await pipeline.onComplete(job.jobId, {
+      outputKey: 'clips/x/r.mp4', thumbnailKey: 'thumbnails/x/r.jpg', subtitleKey: null, durationSec: 35, width: 1080, height: 1920,
+      sizeBytes: 1000, encoder: 'libx264', hasAudio: true, coverKey: 'covers/x/r.jpg',
+      ai: { eyeContact: { status: 'ok' }, relight: { status: 'failed', error: 'sin créditos' }, hookVoice: { status: 'ok' }, cover: { status: 'ok' } },
+    });
+    const saved = await prisma.clipRender.findUniqueOrThrow({ where: { id: render.id } });
+    expect(saved.coverKey).toBe('covers/x/r.jpg');
+    expect(saved.aiStatus).toMatchObject({ relight: { status: 'failed', error: 'sin créditos' } });
+    await prisma.aISettings.update({ where: { userId }, data: { aiMedia: false } });
+  });
+
   it('combinar clips crea uno nuevo con los tramos en orden y no toca los originales', async () => {
     const { rows } = await analysedProject();
     const merged = await clips.merge(userId, [rows[1].id, rows[0].id]);

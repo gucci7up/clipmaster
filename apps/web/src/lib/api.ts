@@ -1,4 +1,4 @@
-import type { AspectRatio, ContentMode, ProviderId, SubtitleStyle, Word } from '@clipmaster/shared';
+import type { AiFeature, AiFeatureStatus, AspectRatio, ContentMode, ProviderId, SubtitleStyle, Word } from '@clipmaster/shared';
 
 export class ApiError extends Error {
   constructor(public status: number, message: string, public body?: unknown) {
@@ -131,6 +131,8 @@ export interface ClipRender {
   encoder: string | null;
   error: string | null;
   renderMs: number | null;
+  /** Resultado de cada función de IA de NVIDIA en este render (null si no se pidió ninguna). */
+  aiStatus: Partial<Record<AiFeature, AiFeatureStatus>> | null;
   createdAt: string;
 }
 
@@ -160,6 +162,12 @@ export interface Clip {
   hookEnabled: boolean;
   hookText: string | null;
   hookDuration: number;
+  aiEyeContact: boolean;
+  aiRelight: number | null;
+  hookVoice: string | null;
+  coverPrompt: string | null;
+  coverUrl: string | null;
+  coverDownloadUrl: string | null;
   /** Clip combinado: tramos de la línea de tiempo del proyecto, en orden. */
   segments: { start: number; end: number }[] | null;
   wordsEdited: boolean;

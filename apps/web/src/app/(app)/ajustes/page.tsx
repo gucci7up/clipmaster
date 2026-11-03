@@ -17,8 +17,9 @@ import { cn } from '@/lib/utils';
 
 interface SettingsResponse {
   settings: { defaultMode: ContentMode; defaultAspect: AspectRatio; defaultLanguage: string | null; theme: string; subtitleStyle: Partial<SubtitleStyle> | null; hookTitles: boolean };
-  ai: { weights: Partial<SignalWeights> | null; visualAnalysis: boolean; semanticLLM: boolean };
+  ai: { weights: Partial<SignalWeights> | null; visualAnalysis: boolean; semanticLLM: boolean; visionLLM: boolean; aiMedia: boolean };
   llmProvider: string | null;
+  aiMediaAvailable: boolean;
 }
 
 const SIGNALS: { k: keyof SignalWeights; l: string }[] = [
@@ -42,6 +43,8 @@ export default function SettingsPage() {
   const [weights, setWeights] = useState<SignalWeights>(MODES.AUTO.weights);
   const [visual, setVisual] = useState(true);
   const [llm, setLlm] = useState(false);
+  const [vision, setVision] = useState(false);
+  const [aiMedia, setAiMedia] = useState(false);
   const [busy, setBusy] = useState<string | null>(null);
   const [pw, setPw] = useState({ currentPassword: '', newPassword: '' });
 
@@ -56,6 +59,8 @@ export default function SettingsPage() {
     setWeights({ ...MODES.AUTO.weights, ...data.ai.weights });
     setVisual(data.ai.visualAnalysis);
     setLlm(data.ai.semanticLLM);
+    setVision(data.ai.visionLLM);
+    setAiMedia(data.ai.aiMedia);
   }, [data]);
 
   async function run(key: string, fn: () => Promise<unknown>, ok: string) {
@@ -73,6 +78,7 @@ export default function SettingsPage() {
 
   if (!data) return <div className="space-y-4"><Skeleton className="h-10 w-48" /><Skeleton className="h-64" /></div>;
 
+  const nvidiaLlm = !!data.llmProvider?.startsWith('nvidia:');
   const setStyle = <K extends keyof SubtitleStyle>(k: K, v: SubtitleStyle[K]) => setStyleState((s) => ({ ...s, [k]: v }));
 
   return (
@@ -130,6 +136,8 @@ export default function SettingsPage() {
           <CardContent className="space-y-4">
             <label className="flex items-center justify-between gap-4 text-sm"><span>Análisis visual<span className="block text-xs text-muted-foreground">Movimiento, cambios de escena y rostros (OpenCV)</span></span><Switch checked={visual} onCheckedChange={setVisual} label="Análisis visual" /></label>
             <label className="flex items-center justify-between gap-4 text-sm"><span>LLM semántico<span className="block text-xs text-muted-foreground">{!data.llmProvider ? 'El administrador no ha configurado ningún proveedor (Ollama o NVIDIA).' : data.llmProvider.startsWith('nvidia:') ? `NVIDIA (${data.llmProvider.slice(7)}): los fragmentos de transcripción de los candidatos se envían a NVIDIA.` : `Ollama local (${data.llmProvider.slice(7)}): no sale nada del servidor.`}</span></span><Switch checked={llm} onCheckedChange={setLlm} disabled={!data.llmProvider && !llm} label="LLM semántico" /></label>
+            <label className="flex items-center justify-between gap-4 text-sm"><span>Análisis visual con IA<span className="block text-xs text-muted-foreground">{nvidiaLlm ? 'Además del texto, se envían 3 fotogramas de cada candidato al modelo de visión de NVIDIA.' : 'Requiere el LLM semántico con el proveedor NVIDIA.'}</span></span><Switch checked={vision} onCheckedChange={setVision} disabled={(!nvidiaLlm || !llm) && !vision} label="Análisis visual con IA" /></label>
+            <label className="flex items-center justify-between gap-4 text-sm"><span>Funciones de IA de NVIDIA<span className="block text-xs text-muted-foreground">{data.aiMediaAvailable ? 'Mirada a cámara, iluminación, voz del gancho y portadas en el editor de cada clip. Los tramos de video, el texto del gancho y la descripción de la portada se envían a NVIDIA.' : 'El administrador no ha configurado la clave de NVIDIA en el render-worker.'}</span></span><Switch checked={aiMedia} onCheckedChange={setAiMedia} disabled={!data.aiMediaAvailable && !aiMedia} label="Funciones de IA de NVIDIA" /></label>
             <label className="flex items-center justify-between gap-4 text-sm"><span>Pesos personalizados<span className="block text-xs text-muted-foreground">Si está desactivado se usan los pesos de cada modo</span></span><Switch checked={customWeights} onCheckedChange={setCustomWeights} label="Pesos personalizados" /></label>
             {customWeights && (
               <div className="space-y-2 rounded-lg border p-3">
@@ -142,7 +150,7 @@ export default function SettingsPage() {
                 ))}
               </div>
             )}
-            <Button loading={busy === 'ai'} onClick={() => run('ai', () => api('/settings/ai', { method: 'PUT', json: { visualAnalysis: visual, semanticLLM: llm, weights: customWeights ? weights : null } }), 'Ajustes de IA guardados')}>Guardar</Button>
+            <Button loading={busy === 'ai'} onClick={() => run('ai', () => api('/settings/ai', { method: 'PUT', json: { visualAnalysis: visual, semanticLLM: llm, visionLLM: vision && llm, aiMedia, weights: customWeights ? weights : null } }), 'Ajustes de IA guardados')}>Guardar</Button>
           </CardContent>
         </Card>
 

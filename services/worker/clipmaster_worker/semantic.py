@@ -9,6 +9,7 @@ Análisis semántico de la transcripción.
 
 from __future__ import annotations
 
+import base64
 import json
 import logging
 import re
@@ -175,6 +176,10 @@ def _user_message(text: str, mode: str) -> str:
     return f"Modo de contenido: {mode}\nTranscripción del fragmento:\n<<<\n{text[:3500]}\n>>>"
 
 
+VISION_NOTE = ("Además del texto recibes fotogramas del fragmento en orden. Ten en cuenta lo que se ve (acción, "
+               "reacciones, gestos, momento deportivo) al puntuar y al proponer el título.")
+
+
 _FENCE = re.compile(r"^```(?:json)?\s*|\s*```$", re.I)
 _THINK = re.compile(r"<think>.*?</think>", re.S | re.I)
 
@@ -207,21 +212,32 @@ def _judge_ollama(settings: Settings, text: str, mode: str) -> str:
     return r.json().get("message", {}).get("content", "")
 
 
-def _judge_nvidia(settings: Settings, text: str, mode: str) -> str:
+def _judge_nvidia(settings: Settings, text: str, mode: str, frames: Optional[list[bytes]] = None) -> str:
     """API de NVIDIA (build.nvidia.com), formato OpenAI /chat/completions. El esquema va en el prompt
-    porque no todos los modelos admiten salida guiada; la respuesta se valida igualmente con Pydantic."""
+    porque no todos los modelos admiten salida guiada; la respuesta se valida igualmente con Pydantic.
+    Con `frames` (JPEG) se usa el modelo de visión y las imágenes van junto al texto."""
+    system = f"{SYSTEM_PROMPT}\nEsquema JSON: {json.dumps(LLM_SCHEMA, ensure_ascii=False)}"
+    user: str | list = _user_message(text, mode)
+    model = settings.nvidia_model
+    if frames:
+        model = settings.nvidia_vision_model
+        system = f"{system}\n{VISION_NOTE}"
+        user = [{"type": "text", "text": user}] + [
+            {"type": "image_url", "image_url": {"url": "data:image/jpeg;base64," + base64.b64encode(f).decode()}}
+            for f in frames
+        ]
     r = httpx.post(
         f"{settings.nvidia_base_url.rstrip('/')}/chat/completions",
         headers={"Authorization": f"Bearer {settings.nvidia_api_key}", "Accept": "application/json"},
         json={
-            "model": settings.nvidia_model,
+            "model": model,
             "temperature": 0.2,
             "max_tokens": 400,
             "stream": False,
             **({"chat_template_kwargs": {"enable_thinking": False}} if settings.nvidia_disable_thinking else {}),
             "messages": [
-                {"role": "system", "content": f"{SYSTEM_PROMPT}\nEsquema JSON: {json.dumps(LLM_SCHEMA, ensure_ascii=False)}"},
-                {"role": "user", "content": _user_message(text, mode)},
+                {"role": "system", "content": system},
+                {"role": "user", "content": user},
             ],
         },
         timeout=settings.llm_timeout_sec,
@@ -232,12 +248,18 @@ def _judge_nvidia(settings: Settings, text: str, mode: str) -> str:
     return r.json()["choices"][0]["message"]["content"] or ""
 
 
-def llm_judge(settings: Settings, text: str, mode: str) -> Optional[LLMVerdict]:
+def vision_available(settings: Settings) -> bool:
+    """El análisis con fotogramas sólo existe con el proveedor NVIDIA y su clave."""
+    return settings.llm_provider == "nvidia" and bool(settings.nvidia_api_key) and bool(settings.nvidia_vision_model)
+
+
+def llm_judge(settings: Settings, text: str, mode: str, frames: Optional[list[bytes]] = None) -> Optional[LLMVerdict]:
     """Evalúa un fragmento con el proveedor configurado; None si la respuesta falla o no valida.
     Lanza LLMUnavailable cuando no tiene sentido seguir llamando (clave, créditos o límite)."""
-    judge = _judge_nvidia if settings.llm_provider == "nvidia" else _judge_ollama
     try:
-        return parse_verdict(judge(settings, text, mode))
+        if settings.llm_provider == "nvidia":
+            return parse_verdict(_judge_nvidia(settings, text, mode, frames))
+        return parse_verdict(_judge_ollama(settings, text, mode))
     except LLMUnavailable:
         raise
     except (httpx.HTTPError, json.JSONDecodeError, ValidationError, KeyError, IndexError, TypeError) as exc:

@@ -102,6 +102,26 @@ def test_custom_base_url_and_model(capture):
     assert json.loads(calls[0].content)["model"] == "otro/modelo"
 
 
+def test_nvidia_vision_sends_frames_to_vision_model(capture):
+    calls = capture(lambda req: chat_completion(json.dumps(VALID)))
+    frames = [b"\xff\xd8\xff-uno", b"\xff\xd8\xff-dos"]
+    v = semantic.llm_judge(nvidia(), "remate increíble", "SPORTS", frames)
+    assert v is not None
+    body = json.loads(calls[0].content)
+    assert body["model"] == "nvidia/nemotron-3-nano-omni-30b-a3b-reasoning"
+    assert "fotogramas" in body["messages"][0]["content"]
+    parts = body["messages"][1]["content"]
+    assert parts[0]["type"] == "text" and "remate increíble" in parts[0]["text"]
+    assert [p["type"] for p in parts[1:]] == ["image_url", "image_url"]
+    assert parts[1]["image_url"]["url"].startswith("data:image/jpeg;base64,")
+
+
+def test_vision_only_with_nvidia_key():
+    assert semantic.vision_available(nvidia()) is True
+    assert semantic.vision_available(Settings(llm_provider="nvidia")) is False
+    assert semantic.vision_available(Settings(ollama_url="http://ollama:11434")) is False
+
+
 def test_ollama_path_unchanged(capture):
     calls = capture(lambda req: httpx.Response(200, json={"message": {"content": json.dumps(VALID)}}))
     v = semantic.llm_judge(Settings(ollama_url="http://ollama:11434"), "texto", "AUTO")
@@ -116,7 +136,7 @@ def test_apply_llm_stops_after_unavailable(monkeypatch):
 
     calls = []
 
-    def judge(settings, text, mode):
+    def judge(settings, text, mode, frames=None):
         calls.append(text)
         raise semantic.LLMUnavailable("429")
 

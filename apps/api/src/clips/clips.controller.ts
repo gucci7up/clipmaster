@@ -2,7 +2,7 @@ import { Body, Controller, Delete, Get, HttpCode, Param, ParseUUIDPipe, Patch, P
 import { ApiPropertyOptional, ApiTags } from '@nestjs/swagger';
 import { AspectRatio } from '@prisma/client';
 import { Type } from 'class-transformer';
-import { ArrayMaxSize, ArrayMinSize, IsArray, IsBoolean, IsEnum, IsIn, IsNumber, IsObject, IsOptional, IsString, IsUUID, Max, MaxLength, Min, ValidateIf, ValidateNested } from 'class-validator';
+import { ArrayMaxSize, ArrayMinSize, IsArray, IsBoolean, IsEnum, IsIn, IsInt, IsNumber, IsObject, IsOptional, IsString, IsUUID, Max, MaxLength, Min, ValidateIf, ValidateNested } from 'class-validator';
 import type { SubtitleStyle } from '@clipmaster/shared';
 import { AuthUser, CurrentUser } from '../auth/auth.guard';
 import { ClipsService } from './clips.service';
@@ -20,6 +20,10 @@ class UpdateClipDto {
   @ApiPropertyOptional() @IsOptional() @IsBoolean() hookEnabled?: boolean;
   @ApiPropertyOptional() @IsOptional() @ValidateIf((_o, v) => v !== null) @IsString() @MaxLength(120) hookText?: string | null;
   @ApiPropertyOptional() @IsOptional() @Type(() => Number) @IsNumber() @Min(1) @Max(10) hookDuration?: number;
+  @ApiPropertyOptional() @IsOptional() @IsBoolean() aiEyeContact?: boolean;
+  @ApiPropertyOptional() @IsOptional() @ValidateIf((_o, v) => v !== null) @IsInt() @Min(0) @Max(4) aiRelight?: number | null;
+  @ApiPropertyOptional() @IsOptional() @ValidateIf((_o, v) => v !== null) @IsString() @MaxLength(80) hookVoice?: string | null;
+  @ApiPropertyOptional() @IsOptional() @ValidateIf((_o, v) => v !== null) @IsString() @MaxLength(600) coverPrompt?: string | null;
 }
 
 class EditedWordDto {

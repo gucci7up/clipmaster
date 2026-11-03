@@ -32,7 +32,7 @@
     "focus": { "start": 0, "end": 120.5 },
     "language": "es",
     "mode": "AUTO",
-    "settings": { "maxClips": 10, "minDuration": 15, "maxDuration": 60, "visualAnalysis": true, "semanticLLM": false, "preference": "balanced" },
+    "settings": { "maxClips": 10, "minDuration": 15, "maxDuration": 60, "visualAnalysis": true, "semanticLLM": false, "visionLLM": false, "preference": "balanced" },
     "outputPrefix": "analysis/a3c1/0b9a",
     "segmentId": null
   },
@@ -55,6 +55,7 @@
     "hook": { "text": "El momento que nadie esperaba", "durationSec": 3 },
     "fonts": [],
     "segments": null,
+    "ai": { "eyeContact": true, "relight": 1, "hookVoice": "Magpie-Multilingual.ES-US.Diego", "coverPrompt": "portada de prueba" },
     "reframe": { "mode": "auto" },
     "track": [{ "t": 0, "x": 0.5, "y": 0.4 }],
     "outputPrefix": "clips/a3c1/0b9a"

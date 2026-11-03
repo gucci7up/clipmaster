@@ -10,7 +10,7 @@ import { StorageService } from '../common/storage.service';
 import { env } from '../config/env';
 import type { MediaKind } from './media.service';
 
-const KINDS: MediaKind[] = ['original', 'render', 'thumb', 'segment', 'subtitle'];
+const KINDS: MediaKind[] = ['original', 'render', 'thumb', 'cover', 'segment', 'subtitle'];
 
 /**
  * Sirve medios privados de MinIO a través de la API con URLs firmadas y soporte Range,
@@ -70,14 +70,15 @@ export class MediaController {
         return { key: s.storageKey, contentType: 'video/mp4', filename: `segmento-${s.index}.mp4` };
       }
       case 'render':
-      case 'thumb': {
+      case 'thumb':
+      case 'cover': {
         const r = await this.prisma.clipRender.findUnique({ where: { id }, include: { clip: true } });
-        const key = kind === 'render' ? r?.outputKey : r?.thumbnailKey;
+        const key = kind === 'render' ? r?.outputKey : kind === 'cover' ? r?.coverKey : r?.thumbnailKey;
         if (!r || !key || r.clip.deletedAt) break;
         const safeTitle = r.clip.title.normalize('NFKD').replace(/[^\w\- ]+/g, '').trim().replace(/\s+/g, '-').slice(0, 60) || 'clip';
         return kind === 'render'
           ? { key, contentType: 'video/mp4', filename: `${safeTitle}.mp4` }
-          : { key, contentType: 'image/jpeg', filename: `${safeTitle}.jpg` };
+          : { key, contentType: 'image/jpeg', filename: `${safeTitle}${kind === 'cover' ? '-portada' : ''}.jpg` };
       }
       case 'subtitle': {
         const t = await this.prisma.subtitleTrack.findUnique({ where: { id } });

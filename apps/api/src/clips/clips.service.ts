@@ -1,6 +1,6 @@
 import { BadRequestException, ConflictException, Injectable, NotFoundException } from '@nestjs/common';
 import { AspectRatio, ClipStatus, Prisma } from '@prisma/client';
-import { BUILTIN_FONTS, DEFAULT_SUBTITLE_STYLE, SUBTITLE_PRESETS, SubtitleStyle, Word } from '@clipmaster/shared';
+import { BUILTIN_FONTS, DEFAULT_SUBTITLE_STYLE, HOOK_VOICES, RELIGHT_PRESETS, SUBTITLE_PRESETS, SubtitleStyle, Word } from '@clipmaster/shared';
 import { AuditService } from '../common/audit.service';
 import { PrismaService } from '../common/prisma.service';
 import { toJSONSafe } from '../common/json';
@@ -22,6 +22,10 @@ export interface UpdateClipInput {
   hookEnabled?: boolean;
   hookText?: string | null;
   hookDuration?: number;
+  aiEyeContact?: boolean;
+  aiRelight?: number | null;
+  hookVoice?: string | null;
+  coverPrompt?: string | null;
 }
 
 const clipInclude = {
@@ -64,6 +68,8 @@ export class ClipsService {
       videoUrl: current?.outputKey ? this.media.url('render', current.id) : null,
       downloadUrl: current?.outputKey ? this.media.url('render', current.id, { download: true }) : null,
       thumbnailUrl: current?.thumbnailKey ? this.media.url('thumb', current.id) : null,
+      coverUrl: current?.coverKey ? this.media.url('cover', current.id) : null,
+      coverDownloadUrl: current?.coverKey ? this.media.url('cover', current.id, { download: true }) : null,
       subtitleUrl: c.subtitleTracks?.[0] ? this.media.url('subtitle', c.subtitleTracks[0].id, { download: true }) : null,
       currentRender: current,
     });
@@ -103,6 +109,10 @@ export class ClipsService {
     if (end - start < 3) throw new BadRequestException('El clip debe durar al menos 3 segundos');
     if (!merged && end - start > 600) throw new BadRequestException('El clip no puede superar 10 minutos');
     if (input.subtitleStyle?.font) await this.assertFont(userId, input.subtitleStyle.font);
+    if (input.aiRelight != null && !(Number.isInteger(input.aiRelight) && input.aiRelight >= 0 && input.aiRelight < RELIGHT_PRESETS.length)) {
+      throw new BadRequestException('Iluminación no válida');
+    }
+    if (input.hookVoice && !HOOK_VOICES.some((v) => v.id === input.hookVoice)) throw new BadRequestException('Voz no válida');
     const sources = await this.pipeline.sourcesFor(clip.projectId, start, end);
     const coverageEnd = Math.max(0, ...sources.map((s) => s.offsetSec + s.durationSec));
     if (!sources.length || end > coverageEnd + 0.5) throw new BadRequestException('El rango excede la duración del video');
@@ -124,6 +134,10 @@ export class ClipsService {
         hookEnabled: input.hookEnabled,
         hookText: input.hookText === undefined ? undefined : input.hookText?.replace(/\s+/g, ' ').trim().slice(0, 120) || null,
         hookDuration: input.hookDuration === undefined ? undefined : Math.max(1, Math.min(10, Number(input.hookDuration) || 3)),
+        aiEyeContact: input.aiEyeContact,
+        aiRelight: input.aiRelight,
+        hookVoice: input.hookVoice === undefined ? undefined : input.hookVoice || null,
+        coverPrompt: input.coverPrompt === undefined ? undefined : input.coverPrompt?.replace(/\s+/g, ' ').trim().slice(0, 600) || null,
       },
       include: clipInclude,
     });
@@ -255,7 +269,7 @@ export class ClipsService {
 
   async remove(userId: string, id: string) {
     const clip = await this.owned(userId, id);
-    const keys = clip.renders.flatMap((r) => [r.outputKey, r.thumbnailKey]).filter((k): k is string => Boolean(k));
+    const keys = clip.renders.flatMap((r) => [r.outputKey, r.thumbnailKey, r.coverKey]).filter((k): k is string => Boolean(k));
     await this.prisma.$transaction([
       this.prisma.clip.update({ where: { id }, data: { deletedAt: new Date() } }),
       this.prisma.storageAsset.updateMany({ where: { key: { in: keys } }, data: { temporary: true, expiresAt: new Date() } }),

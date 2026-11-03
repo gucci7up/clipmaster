@@ -76,6 +76,17 @@ class Settings(BaseSettings):
     nvidia_disable_thinking: bool = True
     llm_timeout_sec: float = 60.0
     llm_max_candidates: int = 12
+    # Análisis con fotogramas (modelo de visión de NVIDIA): se usa si el usuario activa «análisis visual con IA».
+    nvidia_vision_model: str = "nvidia/nemotron-3-nano-omni-30b-a3b-reasoning"
+
+    # Funciones de IA de NVIDIA para el render (opcionales; envían video, audio o texto a NVIDIA).
+    # Los IDs son las funciones públicas de build.nvidia.com; se pueden cambiar si NVIDIA los rota.
+    nvidia_grpc_target: str = "grpc.nvcf.nvidia.com:443"
+    nvidia_eyecontact_function: str = "480bffcb-6fea-4571-9741-eb50212c9c0f"
+    nvidia_relight_function: str = "253bc77f-2d6c-4b9d-86c6-c6fb0f9e239c"
+    nvidia_tts_url: str = "https://877104f7-e885-42b9-8de8-f6e4c6303969.invocation.api.nvcf.nvidia.com/v1/audio/synthesize"
+    nvidia_image_function: str = "f67e96d8-1c4e-422e-a913-90f00e19aa9a"  # FLUX.2 klein 4B (Apache 2.0)
+    nvidia_media_timeout_sec: float = 300.0
 
     render_encoder: Literal["auto", "libx264", "h264_nvenc"] = "auto"
     render_preset: str = "veryfast"
@@ -98,6 +109,11 @@ class Settings(BaseSettings):
         if self.llm_provider == "nvidia":
             return f"nvidia:{self.nvidia_model}" if self.nvidia_api_key else None
         return f"ollama:{self.ollama_model}" if self.ollama_url else None
+
+    @property
+    def ai_media(self) -> bool:
+        """Efectos, voz y portadas de NVIDIA disponibles en este worker (hace falta la clave)."""
+        return bool(self.nvidia_api_key)
 
     @property
     def modes(self) -> dict:

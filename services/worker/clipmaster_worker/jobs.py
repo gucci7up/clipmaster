@@ -126,7 +126,8 @@ class JobRunner:
     def heartbeat(self, role: str, device: str) -> None:
         payload = {"role": role, "id": self.settings.worker_id, "device": device, "busy": self.busy,
                    "processed": self.processed, "model": self.settings.whisper_model,
-                   "llm": self.settings.llm_label if role in ("ai", "all") else None, "at": int(time.time())}
+                   "llm": self.settings.llm_label if role in ("ai", "all") else None,
+                   "aiMedia": self.settings.ai_media if role in ("render", "all") else False, "at": int(time.time())}
         self.redis.set(heartbeat_key(role, self.settings.worker_id), json.dumps(payload), ex=60)
 
 

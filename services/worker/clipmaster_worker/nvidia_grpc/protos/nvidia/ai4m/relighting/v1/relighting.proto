@@ -1,0 +1,213 @@
+// SPDX-FileCopyrightText: Copyright (c) 2026 NVIDIA CORPORATION &
+// AFFILIATES. All rights reserved.
+// SPDX-License-Identifier: MIT
+//
+// Permission is hereby granted, free of charge, to any person obtaining a
+// copy of this software and associated documentation files (the "Software"),
+// to deal in the Software without restriction, including without limitation
+// the rights to use, copy, modify, merge, publish, distribute, sublicense,
+// and/or sell copies of the Software, and to permit persons to whom the
+// Software is furnished to do so, subject to the following conditions:
+//
+// The above copyright notice and this permission notice shall be included in
+// all copies or substantial portions of the Software.
+//
+// THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+// IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+// FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL
+// THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+// LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
+// FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
+// DEALINGS IN THE SOFTWARE.
+
+syntax = "proto3";
+
+package nvidia.ai4m.relighting.v1;
+
+import "google/protobuf/empty.proto";
+import "nvidia/ai4m/video/v1/video.proto";
+
+// The VideoRelightingService provides APIs to run the
+// AI for Media Relighting feature on video streams.
+service VideoRelightingService {
+  // Relight is a bidirectional streaming API to run the
+  // AI for Media Relighting feature on video streams.
+  //
+  // Protocol:
+  // 1. Client sends RelightConfig (optionally indicating inline image uploads)
+  // 2. Client streams ImageData chunks (if configured)
+  // 3. Server sends ImageUploadAck for each image after successful decode
+  // 4. Client streams video data chunks
+  // 5. Server streams back processed video data chunks
+  //
+  // Images (HDRI, background) are sent inline as ImageData within
+  // the same Relight stream.
+  //
+  // Config updates can be sent mid-stream to change parameters.
+  rpc Relight(stream RelightRequest) returns (stream RelightResponse) {}
+}
+
+// Background source selection for compositing.
+//
+// Determines the background source and which Triton model variant is used for
+// inference. Combined with blur_strength to blur the background.
+enum BackgroundSource {
+  // Use the source video frame as the background (default).
+  BACKGROUND_SOURCE_UNSPECIFIED = 0;
+
+  // Use a custom background image uploaded via ImageData
+  // (IMAGE_TYPE_BACKGROUND). If no image is provided, falls back to
+  // background_color.
+  BACKGROUND_SOURCE_FROM_IMAGE = 1;
+
+  // Use the HDR environment map as the background.
+  BACKGROUND_SOURCE_FROM_HDR = 2;
+}
+
+// Identifies which image slot the data belongs to.
+enum ImageType {
+  // Unspecified image type (default)
+  IMAGE_TYPE_UNSPECIFIED = 0;
+  // HDRI environment map (Radiance .hdr format only)
+  IMAGE_TYPE_HDRI = 1;
+  // Custom background image (HDR, PNG, or JPEG format)
+  IMAGE_TYPE_BACKGROUND = 2;
+}
+
+// Configuration for AI for Media Relighting
+message RelightConfig {
+  /* HDRI source selection (mutually exclusive).
+     Set either hdri_preset_id to use a built-in preset, or hdri_image_provided
+     to indicate that a custom HDRI image is sent inline as ImageData. */
+  oneof hdri_source {
+    /* ID of the packaged HDRI image (0-4 for built-in presets).
+       0=Lounge, 1=Cobblestone Street Night, 2=Glasshouse Interior,
+       3=Little Paris Eiffel Tower, 4=Wooden Studio */
+    uint32 hdri_preset_id = 1;
+
+    /* Signals that a custom HDRI image is provided inline via ImageData. */
+    bool hdri_image_provided = 2;
+  }
+
+  /* Optional. The rotation angle for the HDR background & illumination in
+   * radians. (default: -1.5708 radians / -90 degrees). Range: -PI to PI */
+  optional float angle_pan_radians = 3;
+
+  /* Optional. The vertical field of view of the background in radians.
+   (default: 1.0472 radians / 60 degrees). Range: 0.1 to PI */
+  optional float angle_v_fov_radians = 4;
+
+  /* Optional. Output video encoding parameters. */
+  optional video.v1.VideoEncoding output_video_encoding = 5;
+
+  /* Optional. Background source selection.
+     Controls which background source to use and which Triton model is loaded.
+     Combined with blur_strength to reproduce all C++ BG_MODE values.
+     default=BACKGROUND_UNSPECIFIED (source video) */
+  optional BackgroundSource background_source = 6;
+
+  /* Optional. Format/type of the provided background image (see ImageType).
+     Should be set when background_source = BACKGROUND_SOURCE_FROM_IMAGE so the
+     service knows how to decode the ImageData bytes sent with
+     IMAGE_TYPE_BACKGROUND (e.g. as PNG, JPEG, or HDR).
+     Ignored for other background_source values.
+     If omitted, defaults to IMAGE_TYPE_UNSPECIFIED and the server will
+     attempt to auto-detect the image format from the data header bytes. */
+  optional ImageType background_image_type = 7;
+
+  /* Optional. Solid background color in 0xRRGGBB format.
+     Used when background_source is BACKGROUND_SOURCE_FROM_IMAGE and no image
+     is uploaded. Example: 0x808080 for gray. default=0x808080 */
+  optional uint32 background_color = 8;
+
+  /* Optional. Foreground relighting gain/strength.
+     Controls how strongly the relighting effect is applied to the foreground.
+     Range: 0.0 to 2.0. default=1.0 */
+  optional float foreground_gain = 9;
+
+  /* Optional. Background relighting gain/strength.
+     Controls how strongly the relighting effect is applied to the background.
+     Range: 0.0 to 2.0. default=1.0 */
+  optional float background_gain = 10;
+
+  /* Optional. Background blur strength.
+     Controls the amount of blur applied to the background.
+     Range: 0.0 to 1.0 where 0=no blur, 1=maximum blur. default=0.0 */
+  optional float blur_strength = 11;
+
+  /* Optional. Specular highlight control.
+     Controls the intensity of specular highlights in the relighting.
+     Range: 0.0 to 2.0. default=0.0 */
+  optional float specular = 12;
+
+  /* Optional. Enable automatic rotation of HDR environment.
+     When true, the pan angle will automatically rotate during playback.
+     default=false */
+  optional bool autorotate = 13;
+
+  /* Optional. Auto-rotation speed in radians per second.
+     Only used when autorotate is true.
+     default=0.349 radians/sec (20 degrees/sec) */
+  optional float rotation_rate = 14;
+}
+
+// Chunked image data sent inline within the Relight stream.
+// The client sends one or more ImageData messages per image.
+// The server assembles chunks by image_type; the image is considered
+// complete when the next message is a different type (video_data,
+// config, or a different image_type).
+message ImageData {
+  // Which image this data belongs to
+  ImageType image_type = 1;
+  // Image data chunk (recommended: ~64 KiB per message)
+  bytes data = 2;
+}
+
+// Input message for Relight API.
+message RelightRequest {
+  // Configuration parameters for the request
+  RelightConfig config = 1;
+
+  // Video stream data
+  bytes video_data = 2;
+
+  // Inline image upload (HDRI or background).
+  ImageData image_data = 3;
+}
+
+// Acknowledgment sent by the server after an uploaded image (HDRI or
+// background) has been received, format-validated, and successfully decoded.
+message ImageUploadAck {
+  // Which image was acknowledged
+  ImageType image_type = 1;
+  // Total assembled image size in bytes
+  uint32 size_bytes = 2;
+}
+
+// Processing progress for transactional mode (after upload, while transforming
+// frames). Sent by the server so the client can show "Processing: frame X of
+// Y".
+message ProcessingProgress {
+  // Frames processed so far
+  uint32 frames_processed = 1;
+  // Total frames (known after first frame or when stream is decoded); 0 if
+  // unknown
+  optional uint32 total_frames = 2;
+}
+
+// Output message for Relight API.
+message RelightResponse {
+  // Output video stream data
+  optional bytes video_data = 1;
+
+  // Keep alive signaling flag
+  optional google.protobuf.Empty keep_alive = 2;
+
+  // Processing progress (transactional mode): server reports frames processed
+  // / total frames
+  optional ProcessingProgress progress = 3;
+
+  // Image upload acknowledgment: confirms an image was received, validated,
+  // and decoded
+  optional ImageUploadAck image_upload_ack = 4;
+}

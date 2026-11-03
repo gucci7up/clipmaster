@@ -1,0 +1,194 @@
+// SPDX-FileCopyrightText: Copyright (c) 2025-2026 NVIDIA CORPORATION &
+// AFFILIATES. All rights reserved.
+// SPDX-License-Identifier: MIT
+//
+// Permission is hereby granted, free of charge, to any person obtaining a
+// copy of this software and associated documentation files (the "Software"),
+// to deal in the Software without restriction, including without limitation
+// the rights to use, copy, modify, merge, publish, distribute, sublicense,
+// and/or sell copies of the Software, and to permit persons to whom the
+// Software is furnished to do so, subject to the following conditions:
+//
+// The above copyright notice and this permission notice shall be included in
+// all copies or substantial portions of the Software.
+//
+// THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+// IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+// FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL
+// THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+// LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
+// FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
+// DEALINGS IN THE SOFTWARE.
+
+syntax = "proto3";
+
+package nvidia.maxine.eyecontact.v1;
+
+import "google/protobuf/any.proto";
+import "google/protobuf/empty.proto";
+import "nvidia/ai4m/common/v1/service_info.proto";
+
+// The MaxineEyeContactService provides APIs to run the
+// Maxine Eye Contact feature.
+service MaxineEyeContactService {
+
+  // RedirectGaze is a bidirectional streaming API to run the
+  // Maxine Eye Contact feature on mp4 video files.
+  //
+  // The input message can contain GazeRedirectionConfig or bytes.
+  // In the beginning of the stream, a request with GazeRedirectionConfig may
+  // be sent to the server to set the feature's parameter.
+  // The server will echo back a response with the config to signify that the
+  // parameters were properly set. If not configured, default values will be
+  // used for the feature's parameters. Any GazeRedirectionConfig sent during
+  // the middle of the stream will be ignored.
+  //
+  // After the optional configuration, the client streams the input mp4 file in
+  // chunks in the input message and receives the output mp4 file in chunks in
+  // the output message.
+  //
+  // The client should only pass one video file per API invocation and the
+  // configuration, if set, is applied to only that invocation.
+  rpc RedirectGaze(stream RedirectGazeRequest)
+      returns (stream RedirectGazeResponse) {}
+}
+
+// LossyEncoding specifies parameters for lossy video compression
+message LossyEncoding {
+  // Target bitrate for video encoding in bits per second
+  optional uint32 bitrate = 1;
+  // Interval between IDR frames (keyframes) in number of frames
+  optional uint32 idr_interval = 2;
+}
+
+// CustomEncodingParams allows specifying custom encoding parameters
+message CustomEncodingParams {
+  // Map of string key-value pairs for custom encoding configuration
+  // Each value can be any protobuf message type using google.protobuf.Any
+  map<string, google.protobuf.Any> custom = 1;
+}
+
+// OutputVideoEncoding specifies parameters for the output video encoding
+message OutputVideoEncoding {
+  // Only one of these encoding types can be specified
+  oneof encoding_type {
+    // If true, use lossless encoding with no compression
+    bool lossless = 1;
+    // Use lossy encoding with configurable bitrate and keyframe settings
+    LossyEncoding lossy = 2;
+    // Use custom encoding parameters specified as key-value pairs
+    CustomEncodingParams custom_encoding = 3;
+  }
+}
+
+// Configuration for Maxine Eye Contact.
+message RedirectGazeConfig {
+  // Flag to control temporal filtering
+  // Default: 0xffffffff
+  optional uint32 temporal = 1;
+
+  // Flag to toggle detection of eye closure and occlusion on/off
+  // Default: 0 | Range: [0, 1]
+  optional uint32 detect_closure = 2;
+
+  // Eye size sensitivity parameter
+  // Default: 3 | Range: [2, 6]
+  optional uint32 eye_size_sensitivity = 3;
+
+  // Flag to toggle look away on/off.
+  // Default: 0 | Range: [0, 1]
+  optional uint32 enable_lookaway = 4;
+
+  // Maximum value of gaze offset angle (degrees) during a random look away
+  // Default: 5 | Range: [1, 10]
+  optional uint32 lookaway_max_offset = 5;
+
+  // Minimum limit for the number of frames at which random look away occurs
+  // Default: 100 | Range: [1, 600]
+  optional uint32 lookaway_interval_min = 6;
+
+  // Range for picking the number of frames at which random look away occurs
+  // Default: 250 | Range: [1, 600]
+  optional uint32 lookaway_interval_range = 7;
+
+  // Gaze pitch threshold (degrees) at which the redirection starts
+  // transitioning
+  // Default: 20 | Range: [10, 35]
+  optional float gaze_pitch_threshold_low = 8;
+
+  // Gaze pitch threshold (degrees) at which the redirection is equal to
+  // estimated gaze
+  // Default: 30 | Range: [10, 35]
+  optional float gaze_pitch_threshold_high = 9;
+
+  // Gaze yaw threshold (degrees) at which the redirection starts
+  // transitioning
+  // Default: 20 | Range: [10, 35]
+  optional float gaze_yaw_threshold_low = 10;
+
+  // Gaze yaw threshold (degrees) at which the redirection the redirection
+  // is equal to estimated gaze
+  // Default: 30 | Range: [10 ,35]
+  optional float gaze_yaw_threshold_high = 11;
+
+  // Head pose pitch yaw threshold (degrees) at which the redirection
+  // start transitioning away from camera towards estimated gaze
+  // Default: 15 | Range: [10, 35]
+  optional float head_pitch_threshold_low = 12;
+
+  // Head pose pitch yaw threshold (degrees) at which the redirection is
+  // equal to estimated gaze
+  // Default: 15 | Range: [10, 35]
+  optional float head_pitch_threshold_high = 13;
+
+  // Head pose yaw threshold (degrees) at which the redirection starts
+  // transitioning
+  // Default: 15 | Range: [10, 35]
+  optional float head_yaw_threshold_low = 14;
+
+  // Head pose yaw threshold (degrees) at which the redirection is equal
+  // to estimated gaze
+  // Default: 15 | Range: [10, 35]
+  optional float head_yaw_threshold_high = 15;
+
+  // Output video encoding parameters
+  optional OutputVideoEncoding output_video_encoding = 16;
+
+  // Flag to enable multi-person mode.
+  // Redirects gaze for every detected face instead of a single subject.
+  // Default: 0 | Range: [0, 1]
+  optional uint32 enable_multi_person = 17;
+}
+
+// Input message for RedirectGaze API.
+// May contain feature configuration or a chunk of input mp4 file data.
+message RedirectGazeRequest {
+  oneof stream_input {
+    // Configuration parameters for the request
+    RedirectGazeConfig config = 1;
+
+    // mp4 file based video data
+    bytes video_file_data = 2;
+  }
+}
+
+// Output message for RedirectGaze API.
+// May contain feature configuration, a chunk of output mp4 file data,
+// an empty message to keep the connection alive, or a
+// ServiceInfo provenance banner.
+message RedirectGazeResponse {
+  oneof stream_output {
+    // Configuration parameters used
+    RedirectGazeConfig config = 1;
+
+    // Output mp4 video stream data
+    bytes video_file_data = 2;
+
+    // Keep alive signaling flag
+    google.protobuf.Empty keepalive = 3;
+
+    // Identifies the NIM producing the stream and the request being
+    // served (feature name/version, model identity, and request/session IDs).
+    nvidia.ai4m.common.v1.ServiceInfo service_info = 4;
+  }
+}

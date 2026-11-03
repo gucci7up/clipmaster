@@ -104,6 +104,10 @@ Ten en cuenta:
 - cuando se agotan, el análisis sigue con la puntuación local;
 - revisa los términos de NVIDIA antes de usarlo en producción.
 
+### 5c. Funciones de IA de NVIDIA en el render (opcional)
+
+`compose.yaml` pasa la misma `NVIDIA_API_KEY` al render-worker. Con la clave puesta, redespliega el render-worker: *Ajustes* habilitará «Funciones de IA de NVIDIA» (mirada a cámara, iluminación, voz del gancho y portada) y «Análisis visual con IA» (requiere `LLM_PROVIDER=nvidia`). Usa una clave global de build.nvidia.com, no una de un solo modelo. Cada render con efectos consume créditos y tarda más (unos 20 s de Relighting por cada 17 s de video a 1080p).
+
 ## 6. Modelos de Whisper
 
 El ai-worker descarga el modelo de Hugging Face la primera vez y lo guarda en el volumen `models`. Para servidores sin salida a Internet, copia los modelos a ese volumen antes de procesar.

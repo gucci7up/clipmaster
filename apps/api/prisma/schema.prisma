@@ -350,6 +350,14 @@ model Clip {
   hookDuration  Float       @default(3)
   /// Clip combinado: tramos [{ start, end }] que se encadenan en orden.
   segments      Json?
+  /// Funciones de IA de NVIDIA (sólo se aplican si el usuario activó AISettings.aiMedia).
+  aiEyeContact  Boolean     @default(false)
+  /// Preset de iluminación del servicio de NVIDIA (0-4) o null.
+  aiRelight     Int?
+  /// Voz Magpie para leer el título gancho, o null.
+  hookVoice     String?
+  /// Prompt de la portada generada con FLUX.2 klein, o null.
+  coverPrompt   String?
   status        ClipStatus  @default(PENDING)
   currentRenderId String?   @db.Uuid
   deletedAt     DateTime?
@@ -372,6 +380,9 @@ model ClipRender {
   aspect       AspectRatio
   outputKey    String?
   thumbnailKey String?
+  coverKey     String?
+  /// Estado de cada función de IA de NVIDIA en este render: { nombre: { status, error? } }.
+  aiStatus     Json?
   sizeBytes    BigInt?
   durationSec  Float?
   width        Int?
@@ -432,6 +443,10 @@ model AISettings {
   weights        Json?    // overrides por señal (modo CUSTOM y ajustes finos)
   visualAnalysis Boolean  @default(true)
   semanticLLM    Boolean  @default(false)
+  /// Análisis con fotogramas (modelo de visión de NVIDIA): envía imágenes de los candidatos a NVIDIA.
+  visionLLM      Boolean  @default(false)
+  /// Efectos, voz y portadas de NVIDIA en el render: envía tramos de video, texto e indicaciones a NVIDIA.
+  aiMedia        Boolean  @default(false)
   updatedAt      DateTime @updatedAt
   user           User     @relation(fields: [userId], references: [id], onDelete: Cascade)
 }

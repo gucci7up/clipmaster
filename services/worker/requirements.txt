@@ -14,6 +14,9 @@ ctranslate2==4.8.5
 numpy==2.5.4
 # OpenCV 5 eliminó CascadeClassifier (detector Haar incluido); se usa la rama 4.x mantenida.
 opencv-python-headless==4.14.0.94
+# Efectos de video de NVIDIA (opcional, gRPC). protobuf ya lo trae onnxruntime; se fija la misma versión.
+grpcio==1.85.1
+protobuf==7.36.2
 # Captura
 yt-dlp[default]==2026.10.26
 streamlink==8.6.3

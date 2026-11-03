@@ -97,6 +97,8 @@ export interface AnalyzeSettings {
   maxDuration: number;
   visualAnalysis: boolean;
   semanticLLM: boolean;
+  /** Análisis con fotogramas por el modelo de visión de NVIDIA (requiere el proveedor NVIDIA). */
+  visionLLM?: boolean;
   weights?: SignalWeights;
   preference: 'balanced' | 'quality' | 'quantity';
 }
@@ -165,6 +167,8 @@ export interface RenderJobData {
    * `start`/`end` abarcan todos y las palabras usan tiempos de la línea de tiempo original.
    */
   segments?: { start: number; end: number }[] | null;
+  /** Funciones de IA de NVIDIA (opcionales). Sólo se envían si el usuario las activó. */
+  ai?: RenderAI | null;
   reframe: { mode: 'auto' | 'center' | 'manual'; manualX?: number; manualY?: number };
   track?: CropKeyframe[] | null;
   outputPrefix: string;
@@ -227,9 +231,37 @@ export interface AnalyzeResult {
   model: string | null;
 }
 
+/** Funciones de NVIDIA en el render: mirada a cámara, iluminación (preset 0-4), voz del gancho y portada. */
+export interface RenderAI {
+  eyeContact?: boolean;
+  relight?: number | null;
+  hookVoice?: string | null;
+  coverPrompt?: string | null;
+}
+
+export type AiFeature = 'eyeContact' | 'relight' | 'hookVoice' | 'cover';
+export type AiFeatureStatus = { status: 'ok' | 'failed'; error?: string };
+
+/** Presets de iluminación del servicio Maxine Relighting (hdri_preset_id). */
+export const RELIGHT_PRESETS = ['Salón', 'Calle de noche', 'Invernadero', 'París', 'Estudio de madera'] as const;
+
+/** Voces en español (es-US) de Magpie TTS multilingüe. */
+export const HOOK_VOICES = [
+  { id: 'Magpie-Multilingual.ES-US.Diego', label: 'Diego' },
+  { id: 'Magpie-Multilingual.ES-US.Diego.Happy', label: 'Diego (alegre)' },
+  { id: 'Magpie-Multilingual.ES-US.Diego.PleasantSurprised', label: 'Diego (sorprendido)' },
+  { id: 'Magpie-Multilingual.ES-US.Isabela', label: 'Isabela' },
+  { id: 'Magpie-Multilingual.ES-US.Isabela.Happy', label: 'Isabela (alegre)' },
+  { id: 'Magpie-Multilingual.ES-US.Sofia', label: 'Sofía' },
+  { id: 'Magpie-Multilingual.ES-US.Leo', label: 'Leo' },
+  { id: 'Magpie-Multilingual.ES-US.Pascal', label: 'Pascal' },
+] as const;
+
 export interface RenderResult {
   outputKey: string;
   thumbnailKey: string;
+  coverKey?: string | null;
+  ai?: Partial<Record<AiFeature, AiFeatureStatus>> | null;
   subtitleKey: string | null;
   durationSec: number;
   width: number;

@@ -78,6 +78,7 @@ class AnalyzeSettings(_Model):
     maxDuration: float = Field(ge=5)
     visualAnalysis: bool = True
     semanticLLM: bool = False
+    visionLLM: bool = False
     weights: Optional[dict[str, float]] = None
     preference: Literal["balanced", "quality", "quantity"] = "balanced"
 
@@ -159,6 +160,15 @@ class Segment(_Model):
     end: float
 
 
+class RenderAI(_Model):
+    """Funciones de IA de NVIDIA para este render (opcionales; el usuario las activa en Ajustes)."""
+
+    eyeContact: bool = False
+    relight: Optional[int] = Field(default=None, ge=0, le=4)
+    hookVoice: Optional[str] = Field(default=None, max_length=80, pattern=r"^Magpie-Multilingual\.ES-US\.[A-Za-z]+(\.[A-Za-z]+)?$")
+    coverPrompt: Optional[str] = Field(default=None, max_length=600)
+
+
 class Reframe(_Model):
     mode: Literal["auto", "center", "manual"] = "auto"
     manualX: Optional[float] = None
@@ -180,6 +190,7 @@ class RenderJobData(_Model):
     hook: Optional[Hook] = None
     fonts: list[FontRef] = Field(default_factory=list)
     segments: Optional[list[Segment]] = None
+    ai: Optional[RenderAI] = None
     reframe: Reframe
     track: Optional[list[CropKeyframe]] = None
     outputPrefix: str

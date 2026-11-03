@@ -21,6 +21,7 @@ import {
   ProgressEvent,
   Queues,
   QueueName,
+  RenderAI,
   RenderJobData,
   RenderResult,
   SegmentReadyEvent,
@@ -163,6 +164,7 @@ export class PipelineService {
       maxDuration: project.maxDuration,
       visualAnalysis: project.smartDetection && mode.visual && (ai?.visualAnalysis ?? true),
       semanticLLM: project.smartDetection && (ai?.semanticLLM ?? false),
+      visionLLM: project.smartDetection && (ai?.semanticLLM ?? false) && (ai?.visionLLM ?? false),
       weights: (ai?.weights as SignalWeights | null) ?? undefined,
       preference: (project.preference as 'balanced' | 'quality' | 'quantity') ?? 'balanced',
     };
@@ -206,6 +208,7 @@ export class PipelineService {
       where: { projectId: project.id, end: { gt: clip.start }, start: { lt: clip.end } },
       orderBy: { start: 'asc' },
     });
+    const ai = await this.renderAi(project.userId, clip);
     const render = await this.prisma.clipRender.create({
       data: { clipId: clip.id, start: clip.start, end: clip.end, aspect: clip.aspect, status: ClipStatus.PENDING },
     });
@@ -229,6 +232,7 @@ export class PipelineService {
       hook: clip.hookEnabled ? { text: (clip.hookText || clip.title).slice(0, 120), durationSec: clip.hookDuration } : null,
       fonts,
       segments: ranges,
+      ai,
       reframe: {
         mode: (clip.reframeMode as 'auto' | 'center' | 'manual') ?? 'auto',
         manualX: clip.manualX ?? undefined,
@@ -238,6 +242,19 @@ export class PipelineService {
       outputPrefix: prefixFor('clips', project.userId, project.id),
     }));
     return render;
+  }
+
+  /** Funciones de NVIDIA del clip; null si el usuario no las activó o el clip no pide ninguna. */
+  private async renderAi(userId: string, clip: { aiEyeContact: boolean; aiRelight: number | null; hookVoice: string | null; hookEnabled: boolean; coverPrompt: string | null }): Promise<RenderAI | null> {
+    const settings = await this.prisma.aISettings.findUnique({ where: { userId } });
+    if (!settings?.aiMedia) return null;
+    const ai: RenderAI = {
+      eyeContact: clip.aiEyeContact,
+      relight: clip.aiRelight,
+      hookVoice: clip.hookEnabled ? clip.hookVoice : null,
+      coverPrompt: clip.coverPrompt,
+    };
+    return ai.eyeContact || ai.relight != null || ai.hookVoice || ai.coverPrompt ? ai : null;
   }
 
   /** Archivos fuente que cubren [start, end]: el original (VOD) o los segmentos del directo. */
@@ -554,6 +571,7 @@ export class PipelineService {
       where: { id: payload.renderId },
       data: {
         status: ClipStatus.READY, outputKey: r.outputKey, thumbnailKey: r.thumbnailKey, sizeBytes: BigInt(r.sizeBytes),
+        coverKey: r.coverKey ?? null, aiStatus: r.ai ? (r.ai as Prisma.InputJsonValue) : Prisma.DbNull,
         durationSec: r.durationSec, width: r.width, height: r.height, encoder: r.encoder, finishedAt: new Date(),
         renderMs: render ? Date.now() - render.createdAt.getTime() : null,
       },
@@ -566,6 +584,7 @@ export class PipelineService {
     }
     await this.trackAsset(project.userId, project.id, AssetKind.CLIP, r.outputKey, r.sizeBytes, 'video/mp4');
     await this.trackAsset(project.userId, project.id, AssetKind.THUMBNAIL, r.thumbnailKey, 0, 'image/jpeg');
+    if (r.coverKey) await this.trackAsset(project.userId, project.id, AssetKind.THUMBNAIL, r.coverKey, 0, 'image/jpeg');
     if (r.subtitleKey) {
       await this.trackAsset(project.userId, project.id, AssetKind.SUBTITLE, r.subtitleKey, 0, 'text/x-ssa');
       await this.prisma.subtitleTrack.create({ data: { clipId: payload.clipId, renderId: payload.renderId, format: 'ass', storageKey: r.subtitleKey } });

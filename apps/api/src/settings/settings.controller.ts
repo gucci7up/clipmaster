@@ -28,6 +28,8 @@ class UpdateAiSettingsDto {
   @ApiPropertyOptional() @IsOptional() @IsObject() weights?: SignalWeights | null;
   @ApiPropertyOptional() @IsOptional() @IsBoolean() visualAnalysis?: boolean;
   @ApiPropertyOptional() @IsOptional() @IsBoolean() semanticLLM?: boolean;
+  @ApiPropertyOptional() @IsOptional() @IsBoolean() visionLLM?: boolean;
+  @ApiPropertyOptional() @IsOptional() @IsBoolean() aiMedia?: boolean;
 }
 
 class AdminUpdateUserDto {
@@ -61,14 +63,17 @@ export class SettingsController {
       this.prisma.userSettings.upsert({ where: { userId: user.id }, create: { userId: user.id }, update: {} }),
       this.prisma.aISettings.upsert({ where: { userId: user.id }, create: { userId: user.id }, update: {} }),
     ]);
-    return { settings, ai, llmProvider: await this.llmProvider() };
+    const workers = await this.workers();
+    const llmProvider = workers.map((w) => w.llm).find(Boolean) ?? null;
+    return { settings, ai, llmProvider, aiMediaAvailable: workers.some((w) => w.aiMedia === true) };
   }
 
   /**
-   * Proveedor LLM que anuncian los ai-workers en su heartbeat ("ollama:<modelo>", "nvidia:<modelo>" o null).
-   * Se muestra en Ajustes para que el usuario sepa si los fragmentos de transcripción salen del servidor.
+   * Lo que anuncian los workers en su heartbeat: proveedor LLM de los ai-workers ("ollama:<modelo>",
+   * "nvidia:<modelo>" o null) y si el render-worker tiene las funciones de NVIDIA (clave configurada).
+   * Se muestra en Ajustes para que el usuario sepa qué sale del servidor antes de activarlo.
    */
-  private async llmProvider(): Promise<string | null> {
+  private async workers(): Promise<{ llm?: string | null; aiMedia?: boolean }[]> {
     try {
       const keys: string[] = [];
       let cursor = '0';
@@ -78,14 +83,10 @@ export class SettingsController {
         keys.push(...batch);
       } while (cursor !== '0');
       const values = keys.length ? await this.redis.client.mget(keys) : [];
-      for (const v of values) {
-        const llm = v ? (JSON.parse(v) as { llm?: string | null }).llm : null;
-        if (llm) return llm;
-      }
+      return values.filter((v): v is string => Boolean(v)).map((v) => JSON.parse(v) as { llm?: string | null; aiMedia?: boolean });
     } catch {
-      /* Redis no disponible: se informa como sin proveedor */
+      return []; // Redis no disponible: se informa como sin proveedor
     }
-    return null;
   }
 
   @Put('settings')
@@ -113,7 +114,7 @@ export class SettingsController {
       }
       weights = clean;
     }
-    const data = { weights, visualAnalysis: dto.visualAnalysis, semanticLLM: dto.semanticLLM };
+    const data = { weights, visualAnalysis: dto.visualAnalysis, semanticLLM: dto.semanticLLM, visionLLM: dto.visionLLM, aiMedia: dto.aiMedia };
     const saved = await this.prisma.aISettings.upsert({ where: { userId: user.id }, create: { userId: user.id, ...data }, update: data });
     await this.audit.log(user.id, 'settings.ai_updated', user.id);
     return saved;

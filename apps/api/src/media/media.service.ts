@@ -2,7 +2,7 @@ import { Injectable } from '@nestjs/common';
 import { signMedia } from '../common/signing';
 import { env } from '../config/env';
 
-export type MediaKind = 'original' | 'render' | 'thumb' | 'segment' | 'subtitle';
+export type MediaKind = 'original' | 'render' | 'thumb' | 'cover' | 'segment' | 'subtitle';
 
 /** Genera URLs firmadas (HMAC, caducidad corta) servidas por MediaController. */
 @Injectable()

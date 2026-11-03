@@ -134,6 +134,7 @@ services:
       NVIDIA_BASE_URL: ${NVIDIA_BASE_URL:-https://integrate.api.nvidia.com/v1}
       NVIDIA_MODEL: ${NVIDIA_MODEL:-nvidia/nemotron-3.5-lightning-30b-a3b}
       NVIDIA_DISABLE_THINKING: ${NVIDIA_DISABLE_THINKING:-true}
+      NVIDIA_VISION_MODEL: ${NVIDIA_VISION_MODEL:-nvidia/nemotron-3-nano-omni-30b-a3b-reasoning}
     volumes:
       - ai-work:/data/work
       - models:/models
@@ -149,6 +150,8 @@ services:
       RENDER_PRESET: ${RENDER_PRESET:-veryfast}
       RENDER_CRF: ${RENDER_CRF:-20}
       FFMPEG_THREADS: ${FFMPEG_THREADS:-0}
+      # Funciones de IA de NVIDIA en el render (mirada, iluminación, voz, portada). Sin clave no se activan.
+      NVIDIA_API_KEY: ${NVIDIA_API_KEY:-}
     volumes:
       - render-work:/data/work
 
