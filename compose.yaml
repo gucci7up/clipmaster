@@ -92,6 +92,7 @@ services:
       SMTP_URL: ${SMTP_URL:-}
       SMTP_FROM: ${SMTP_FROM:-ClipMaster AI <no-reply@localhost>}
       LOG_LEVEL: ${API_LOG_LEVEL:-info}
+      AGENT_PROVIDERS: ${AGENT_PROVIDERS-YOUTUBE}
     volumes:
       - api-uploads:/data/uploads
     depends_on:

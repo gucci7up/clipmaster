@@ -1,5 +1,6 @@
 import { BadGatewayException, BadRequestException, Injectable, Logger } from '@nestjs/common';
 import { detectProvider, PROVIDERS, ProviderId } from '@clipmaster/shared';
+import { AgentsService, usesAgent } from '../agents/agents.service';
 import { env } from '../config/env';
 
 export interface ValidationResult {
@@ -12,6 +13,9 @@ export interface ValidationResult {
   supportsLive: boolean;
   reason: string | null;
   notes: string | null;
+  /** La validación real la hará el capturador remoto al tomar el trabajo. */
+  deferred?: boolean;
+  agentOnline?: boolean;
 }
 
 /**
@@ -23,6 +27,8 @@ export interface ValidationResult {
 export class SourcesService {
   private readonly log = new Logger(SourcesService.name);
 
+  constructor(private readonly agents: AgentsService) {}
+
   quickCheck(url: string): ProviderId {
     if (url.length > 2048) throw new BadRequestException('URL demasiado larga');
     const provider = detectProvider(url);
@@ -32,6 +38,17 @@ export class SourcesService {
 
   async validate(url: string): Promise<ValidationResult> {
     const provider = this.quickCheck(url);
+    if (usesAgent(provider)) {
+      // El servidor no puede consultar este proveedor (bloquea su IP): lo validará el capturador.
+      const agentOnline = await this.agents.anyOnline();
+      return {
+        ok: true, provider, isLive: false, title: null, durationSec: null, thumbnail: null, supportsLive: false,
+        reason: null, deferred: true, agentOnline,
+        notes: agentOnline
+          ? 'Lo descargará el capturador de tu PC, que lo validará al empezar.'
+          : 'Tu capturador no está conectado: el proyecto esperará hasta que lo inicies en tu PC.',
+      };
+    }
     let res: Response;
     try {
       res = await fetch(`${env().CAPTURE_WORKER_URL}/validate`, {

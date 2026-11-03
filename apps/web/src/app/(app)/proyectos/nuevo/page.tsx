@@ -158,7 +158,12 @@ export default function NewProjectPage() {
                     <div className={cn('flex gap-3 rounded-lg border p-3 text-sm', validation.ok ? 'border-success/40 bg-success/5' : 'border-destructive/40 bg-destructive/5')}>
                       {validation.ok ? <CheckCircle2 className="size-5 shrink-0 text-success" /> : <XCircle className="size-5 shrink-0 text-destructive" />}
                       <div className="min-w-0 space-y-1">
-                        {validation.ok ? (
+                        {validation.ok && validation.deferred ? (
+                          <>
+                            <p className="font-medium">Enlace aceptado</p>
+                            <p className={validation.agentOnline ? 'text-muted-foreground' : 'text-amber-600 dark:text-amber-400'}>{validation.notes}</p>
+                          </>
+                        ) : validation.ok ? (
                           <>
                             <p className="font-medium">{validation.title ?? 'Contenido accesible'}</p>
                             <p className="text-muted-foreground">

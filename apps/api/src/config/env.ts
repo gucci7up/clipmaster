@@ -43,6 +43,11 @@ const schema = z.object({
   SMTP_URL: optional(z.string()),
   SMTP_FROM: z.string().default('ClipMaster AI <no-reply@localhost>'),
   LOG_LEVEL: z.string().default('info'),
+  /** Proveedores cuyas importaciones por URL las hace un capturador remoto (lista separada por comas; vacío = ninguno). */
+  AGENT_PROVIDERS: z
+    .string()
+    .default('YOUTUBE')
+    .transform((v) => v.split(',').map((s) => s.trim().toUpperCase()).filter(Boolean)),
 });
 
 export type Env = z.infer<typeof schema>;

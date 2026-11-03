@@ -124,6 +124,7 @@ model User {
   aiSettings AISettings?
   assets     StorageAsset[]
   auditLogs  AuditLog[]
+  captureAgents CaptureAgent[]
 }
 
 model Session {
@@ -456,4 +457,18 @@ model AuditLog {
 
   @@index([userId, createdAt])
   @@index([action])
+}
+
+/// Capturador remoto (p. ej. el PC del usuario) que procesa importaciones de proveedores que
+/// bloquean IPs de servidores. Se autentica con un token Bearer; sólo se guarda su hash.
+model CaptureAgent {
+  id          String    @id @default(uuid()) @db.Uuid
+  name        String
+  tokenHash   String    @unique
+  tokenPrefix String
+  createdById String    @db.Uuid
+  createdAt   DateTime  @default(now())
+  lastSeenAt  DateTime?
+  revokedAt   DateTime?
+  createdBy   User      @relation(fields: [createdById], references: [id], onDelete: Cascade)
 }

@@ -1,0 +1,6 @@
+# Dependencias mínimas del capturador remoto (python -m clipmaster_worker.agent): sin IA, Redis ni S3.
+# Requiere además FFmpeg en el PATH y Node ≥ 22 o Deno para los retos JavaScript de YouTube.
+httpx==0.28.1
+pydantic==2.14.2
+pydantic-settings==2.16.2
+yt-dlp[default]==2026.10.26

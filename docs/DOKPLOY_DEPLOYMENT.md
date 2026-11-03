@@ -52,6 +52,7 @@ Al arrancar, la API:
 - Ningún servicio publica puertos en el host. Traefik llega a `web` y `api` por `dokploy-network`.
 - PostgreSQL, Redis, el almacenamiento (`storage`) y los workers solo están en la red `backend`.
 - Para inspeccionar algo interno, usa la terminal del contenedor en Dokploy. No abras puertos.
+- Los capturadores remotos (YouTube) entran por el mismo dominio público (`/api/capture-agent`) con su token; no requieren abrir puertos ni túneles. Ver `CAPTURADOR.md`.
 
 ## 4. GPU
 

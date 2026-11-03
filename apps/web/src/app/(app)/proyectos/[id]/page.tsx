@@ -19,7 +19,7 @@ const STAGE_LABEL: Record<string, string> = {
   validate: 'Validando', download: 'Descargando', import: 'Importando', audio: 'Extrayendo audio',
   transcribe: 'Transcribiendo', audio_analysis: 'Señales de audio', visual_analysis: 'Señales visuales',
   semantic: 'Análisis semántico', scoring: 'Puntuación', render: 'Renderizando', capture: 'Capturando',
-  reconnecting: 'Reconectando',
+  reconnecting: 'Reconectando', waiting_agent: 'Esperando al capturador de tu PC', claimed: 'Asignado al capturador',
 };
 const JOB_STATUS: Record<Job['status'], { label: string; variant: 'default' | 'secondary' | 'success' | 'destructive' }> = {
   QUEUED: { label: 'En cola', variant: 'secondary' }, RUNNING: { label: 'En curso', variant: 'default' },
@@ -34,7 +34,7 @@ function JobRow({ job }: { job: Job }) {
   return (
     <div className="space-y-1.5 rounded-lg border p-3">
       <div className="flex items-center justify-between gap-2 text-sm">
-        <span className="font-medium">{JOB_LABEL[job.type]}{job.stage && job.status === 'RUNNING' && <span className="font-normal text-muted-foreground"> · {STAGE_LABEL[job.stage] ?? job.stage}</span>}</span>
+        <span className="font-medium">{JOB_LABEL[job.type]}{job.stage && (job.status === 'RUNNING' || job.stage === 'waiting_agent') && <span className="font-normal text-muted-foreground"> · {STAGE_LABEL[job.stage] ?? job.stage}</span>}</span>
         <Badge variant={s.variant}>{s.label}</Badge>
       </div>
       {job.status === 'RUNNING' && <Progress value={job.progress} />}

@@ -8,9 +8,10 @@ import {
   UnauthorizedException,
 } from '@nestjs/common';
 import { Reflector } from '@nestjs/core';
-import { Role } from '@prisma/client';
+import { CaptureAgent, Role } from '@prisma/client';
 import type { Request } from 'express';
 import { timingSafeEqual } from 'node:crypto';
+import { AgentsService } from '../agents/agents.service';
 import { env } from '../config/env';
 import { AuthService, SESSION_COOKIE } from './auth.service';
 
@@ -29,6 +30,13 @@ export const Roles = (...roles: Role[]) => SetMetadata(ROLES, roles);
 export const IS_INTERNAL = 'isInternal';
 /** Rutas sólo para workers dentro de la red Docker. */
 export const Internal = () => SetMetadata(IS_INTERNAL, true);
+export const IS_AGENT = 'isAgent';
+/** Rutas para capturadores remotos: llegan por el dominio público con un token de capturador. */
+export const AgentOnly = () => SetMetadata(IS_AGENT, true);
+
+export const CurrentAgent = createParamDecorator((_d: unknown, ctx: ExecutionContext): CaptureAgent => {
+  return ctx.switchToHttp().getRequest<Request & { agent: CaptureAgent }>().agent;
+});
 
 export const CurrentUser = createParamDecorator((_d: unknown, ctx: ExecutionContext): AuthUser => {
   return ctx.switchToHttp().getRequest<Request & { user: AuthUser }>().user;
@@ -37,14 +45,22 @@ export const CurrentUser = createParamDecorator((_d: unknown, ctx: ExecutionCont
 /** Guard global: sesión por cookie (o Bearer) salvo rutas @Public / @Internal. */
 @Injectable()
 export class AuthGuard implements CanActivate {
-  constructor(private readonly reflector: Reflector, private readonly auth: AuthService) {}
+  constructor(private readonly reflector: Reflector, private readonly auth: AuthService, private readonly agents: AgentsService) {}
 
   async canActivate(ctx: ExecutionContext): Promise<boolean> {
     const targets = [ctx.getHandler(), ctx.getClass()];
-    const req = ctx.switchToHttp().getRequest<Request & { user?: AuthUser }>();
+    const req = ctx.switchToHttp().getRequest<Request & { user?: AuthUser; agent?: CaptureAgent }>();
 
     if (this.reflector.getAllAndOverride<boolean>(IS_INTERNAL, targets)) {
       return checkInternal(req);
+    }
+    if (this.reflector.getAllAndOverride<boolean>(IS_AGENT, targets)) {
+      const h = req.headers.authorization ?? '';
+      const agent = h.startsWith('Bearer ') ? await this.agents.authenticate(h.slice(7)) : null;
+      if (!agent) throw new UnauthorizedException('Token de capturador inválido o revocado');
+      await this.agents.touch(agent);
+      req.agent = agent;
+      return true;
     }
     if (this.reflector.getAllAndOverride<boolean>(IS_PUBLIC, targets)) return true;
 

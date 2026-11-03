@@ -2,6 +2,8 @@ import { Global, Module } from '@nestjs/common';
 import { APP_GUARD } from '@nestjs/core';
 import { ThrottlerGuard, ThrottlerModule } from '@nestjs/throttler';
 import { LoggerModule } from 'nestjs-pino';
+import { AgentsAdminController, AgentsController } from './agents/agents.controller';
+import { AgentsService } from './agents/agents.service';
 import { AuthController } from './auth/auth.controller';
 import { AuthGuard } from './auth/auth.guard';
 import { AuthService } from './auth/auth.service';
@@ -52,6 +54,8 @@ import { StatsController } from './stats/stats.controller';
     HealthController,
     SettingsController,
     InternalController,
+    AgentsController,
+    AgentsAdminController,
   ],
   providers: [
     PrismaService,
@@ -59,6 +63,7 @@ import { StatsController } from './stats/stats.controller';
     StorageService,
     AuditService,
     AuthService,
+    AgentsService,
     EventsService,
     QueueService,
     PipelineService,

@@ -189,6 +189,9 @@ export interface ValidationResult {
   supportsLive: boolean;
   reason: string | null;
   notes: string | null;
+  /** El enlace lo validará y descargará el capturador del PC del usuario. */
+  deferred?: boolean;
+  agentOnline?: boolean;
 }
 
 export interface AppEvent {

@@ -1,11 +1,15 @@
 import {
+  AbortMultipartUploadCommand,
+  CompleteMultipartUploadCommand,
   CreateBucketCommand,
+  CreateMultipartUploadCommand,
   DeleteObjectCommand,
   GetObjectCommand,
   HeadBucketCommand,
   HeadObjectCommand,
   PutBucketPolicyCommand,
   S3Client,
+  UploadPartCommand,
 } from '@aws-sdk/client-s3';
 import { Upload } from '@aws-sdk/lib-storage';
 import { Injectable, Logger, OnModuleInit } from '@nestjs/common';
@@ -96,6 +100,27 @@ export class StorageService implements OnModuleInit {
       queueSize: 4,
       partSize: 16 * 1024 * 1024,
     }).done();
+  }
+
+  /** Subida multiparte controlada por el llamador (capturadores remotos que envían el archivo por trozos). */
+  async createMultipart(key: string, contentType: string): Promise<string> {
+    const r = await this.s3.send(new CreateMultipartUploadCommand({ Bucket: this.bucket, Key: key, ContentType: contentType }));
+    if (!r.UploadId) throw new Error('El almacenamiento no devolvió UploadId');
+    return r.UploadId;
+  }
+
+  async uploadPart(key: string, uploadId: string, partNumber: number, body: Buffer): Promise<string> {
+    const r = await this.s3.send(new UploadPartCommand({ Bucket: this.bucket, Key: key, UploadId: uploadId, PartNumber: partNumber, Body: body }));
+    if (!r.ETag) throw new Error('El almacenamiento no devolvió ETag');
+    return r.ETag;
+  }
+
+  async completeMultipart(key: string, uploadId: string, parts: { PartNumber: number; ETag: string }[]): Promise<void> {
+    await this.s3.send(new CompleteMultipartUploadCommand({ Bucket: this.bucket, Key: key, UploadId: uploadId, MultipartUpload: { Parts: parts } }));
+  }
+
+  async abortMultipart(key: string, uploadId: string): Promise<void> {
+    await this.s3.send(new AbortMultipartUploadCommand({ Bucket: this.bucket, Key: key, UploadId: uploadId })).catch(() => undefined);
   }
 
   async head(key: string): Promise<{ size: number; contentType?: string } | null> {

@@ -29,6 +29,7 @@ Navegador ──HTTPS──▶ Traefik (Dokploy) ─┬─ /     ▶ web (Next.j
 | [DOKPLOY_DEPLOYMENT](docs/DOKPLOY_DEPLOYMENT.md) | Despliegue, GPU, copias de seguridad |
 | [AI_PIPELINE](docs/AI_PIPELINE.md) | Transcripción, señales, puntuación y render |
 | [STREAM_PROVIDERS](docs/STREAM_PROVIDERS.md) | Qué plataformas funcionan y con qué límites |
+| [CAPTURADOR](docs/CAPTURADOR.md) | Capturador en tu PC para enlaces de YouTube |
 | [SECURITY](docs/SECURITY.md) | Exposición, auth, SSRF, secretos |
 | [TESTING](docs/TESTING.md) | Pruebas, resultados y qué falta verificar |
 

@@ -28,6 +28,7 @@ import {
   SubtitleStyle,
   ProviderId,
 } from '@clipmaster/shared';
+import { AGENT_QUEUE, usesAgent, WAITING_STAGE } from '../agents/agents.service';
 import { PrismaService } from '../common/prisma.service';
 import { prefixFor } from '../common/storage.service';
 import { env } from '../config/env';
@@ -81,16 +82,18 @@ export class PipelineService {
 
   /**
    * Crea la fila ProcessingJob (dedupeKey única) y la encola en BullMQ con jobId = id de la fila.
-   * Si ya existe un job con la misma clave, no se duplica.
+   * Si ya existe un job con la misma clave, no se duplica. Los jobs de la cola del capturador remoto
+   * sólo viven en PostgreSQL: el capturador los toma por HTTPS (ver AgentsService.claim).
    */
-  async createJob(project: Pick<Project, 'id'>, type: JobType, dedupeKey: string, build: (jobId: string) => AnyJobData) {
+  async createJob(project: Pick<Project, 'id'>, type: JobType, dedupeKey: string, build: (jobId: string) => AnyJobData, queueOverride?: string) {
     const existing = await this.prisma.processingJob.findUnique({ where: { dedupeKey } });
     if (existing) return existing;
-    const queue = TYPE_QUEUE[type];
+    const queue = queueOverride ?? TYPE_QUEUE[type];
+    const remote = queue === AGENT_QUEUE;
     let row;
     try {
       row = await this.prisma.processingJob.create({
-        data: { projectId: project.id, type, queue, dedupeKey, payload: {} },
+        data: { projectId: project.id, type, queue, dedupeKey, payload: {}, stage: remote ? WAITING_STAGE : null },
       });
     } catch (err) {
       if ((err as Prisma.PrismaClientKnownRequestError).code === 'P2002') {
@@ -100,7 +103,7 @@ export class PipelineService {
     }
     const data = build(row.id);
     row = await this.prisma.processingJob.update({ where: { id: row.id }, data: { payload: data as unknown as Prisma.InputJsonValue } });
-    await this.queues.enqueue(queue, data);
+    if (!remote) await this.queues.enqueue(queue as QueueName, data);
     return row;
   }
 
@@ -109,6 +112,7 @@ export class PipelineService {
       where: { id: project.id },
       data: { status: source.type === 'url' ? ProjectStatus.VALIDATING : ProjectStatus.DOWNLOADING, startedAt: new Date(), errorMessage: null },
     });
+    const remote = source.type === 'url' && usesAgent(source.provider);
     await this.createJob(project, JobType.IMPORT, `import:${project.id}`, (jobId) => ({
       kind: 'import',
       jobId,
@@ -117,8 +121,10 @@ export class PipelineService {
       source,
       outputPrefix: prefixFor('originals', project.userId, project.id),
       maxDurationSec: env().MAX_VIDEO_DURATION_SEC,
-    }));
-    await this.emitProject(project, 'project.started', { message: 'Procesamiento iniciado' });
+    }), remote ? AGENT_QUEUE : undefined);
+    await this.emitProject(project, 'project.started', {
+      message: remote ? 'Esperando al capturador de tu PC para descargar el enlace' : 'Procesamiento iniciado',
+    });
   }
 
   async startLive(project: Project, url: string, provider: ProviderId) {
@@ -618,7 +624,7 @@ export class PipelineService {
     await this.queues.signalCancel(project.id);
     const jobs = await this.prisma.processingJob.findMany({ where: { projectId: project.id, status: { in: ACTIVE_JOB } } });
     for (const j of jobs) {
-      await this.queues.removeIfPending(j.queue as QueueName, j.id).catch(() => undefined);
+      if (j.queue !== AGENT_QUEUE) await this.queues.removeIfPending(j.queue as QueueName, j.id).catch(() => undefined);
       if (j.type === JobType.LIVE_CAPTURE) await this.queues.signalStopCapture((j.payload as { captureSessionId: string }).captureSessionId);
     }
     await this.prisma.processingJob.updateMany({ where: { projectId: project.id, status: { in: ACTIVE_JOB } }, data: { status: JobStatus.CANCELLED, finishedAt: new Date() } });

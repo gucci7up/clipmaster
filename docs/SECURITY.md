@@ -23,6 +23,13 @@
 - El registro público está desactivado por defecto en compose (`ALLOW_REGISTRATION=false`). El administrador inicial se crea desde `ADMIN_EMAIL` y `ADMIN_PASSWORD`.
 - La recuperación de contraseña solo existe si hay `SMTP_URL`. Los tokens son de un solo uso, caducan y se guardan como hash.
 
+## Capturador remoto
+
+- El capturador (`python -m clipmaster_worker.agent`) sólo hace conexiones **salientes HTTPS** a `/api/capture-agent` del dominio público; no abre puertos ni necesita VPN, Redis o credenciales de S3.
+- Token `cma_…` creado por un administrador; en la base de datos sólo se guarda su SHA-256 y puede revocarse. En Windows, `iniciar-capturador.ps1` lo guarda cifrado con DPAPI en `%APPDATA%\ClipMaster`, fuera del repositorio.
+- Cada llamada comprueba que el trabajo está asignado a ese capturador (lease en Redis) y la subida sólo admite la clave de salida esperada del trabajo; el tamaño se toma del almacenamiento, no del capturador.
+- El capturador aplica la misma guardia de URLs y la misma lista de extractores que el servidor; no usa cookies ni inicia sesión en la plataforma.
+
 ## Entradas
 
 - `ValidationPipe` global con `whitelist` y `forbidNonWhitelisted`, más DTOs con class-validator.

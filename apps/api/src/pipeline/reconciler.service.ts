@@ -1,6 +1,7 @@
 import { Injectable, Logger, OnApplicationBootstrap, OnModuleDestroy } from '@nestjs/common';
 import { JobStatus } from '@prisma/client';
 import type { AnyJobData, QueueName } from '@clipmaster/shared';
+import { AgentsService, AGENT_QUEUE, WAITING_STAGE } from '../agents/agents.service';
 import { PrismaService } from '../common/prisma.service';
 import { RedisService } from '../common/redis.service';
 import { env } from '../config/env';
@@ -27,6 +28,7 @@ export class ReconcilerService implements OnApplicationBootstrap, OnModuleDestro
     private readonly queues: QueueService,
     private readonly pipeline: PipelineService,
     private readonly redis: RedisService,
+    private readonly agents: AgentsService,
   ) {}
 
   onApplicationBootstrap() {
@@ -56,6 +58,10 @@ export class ReconcilerService implements OnApplicationBootstrap, OnModuleDestro
       take: 200,
     });
     for (const row of stale) {
+      if (row.queue === AGENT_QUEUE) {
+        await this.reconcileAgentJob(row);
+        continue;
+      }
       const job = await this.queues.getJob(row.queue as QueueName, row.id);
       if (!job) {
         if (row.attempts >= env().JOB_ATTEMPTS + 2) {
@@ -84,5 +90,23 @@ export class ReconcilerService implements OnApplicationBootstrap, OnModuleDestro
       take: 200,
     });
     for (const p of open) await this.pipeline.checkCompletion(p.id);
+  }
+
+  /**
+   * Trabajos del capturador remoto: en espera pueden quedarse indefinidamente (el PC puede estar
+   * apagado); si estaban asignados y el lease caducó, el capturador se desconectó y vuelven a la cola.
+   */
+  private async reconcileAgentJob(row: { id: string; stage: string | null; attempts: number }) {
+    if (row.stage === WAITING_STAGE) {
+      await this.prisma.processingJob.update({ where: { id: row.id }, data: { stage: row.stage } });
+      return;
+    }
+    if (await this.agents.hasLease(row.id)) return;
+    if (row.attempts >= env().JOB_ATTEMPTS) {
+      await this.pipeline.onFail(row.id, 'El capturador se desconectó repetidamente durante la descarga', false, row.attempts);
+      return;
+    }
+    this.log.warn(`Job ${row.id}: el capturador dejó de responder; vuelve a la cola`);
+    await this.agents.requeue(row.id);
   }
 }

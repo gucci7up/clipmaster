@@ -42,6 +42,7 @@ Leyenda:
 | Guardia SSRF (todas las IPs, redirecciones, puertos) | ✅ unitarias |
 | URL directa / HLS (rechazo de DRM) | 🟡 |
 | YouTube, Twitch, Kick, TikTok vía yt-dlp (sin cookies) | 🟡 *best-effort* (ver `STREAM_PROVIDERS.md`) |
+| Capturador remoto para YouTube (PC del usuario, HTTPS saliente, cola en PostgreSQL con lease) | 🟡 protocolo probado (API + PostgreSQL real, agente con servidor simulado); descarga real desde un PC pendiente de verificar |
 
 ## Etapa 4: Directos
 

@@ -11,6 +11,7 @@ from __future__ import annotations
 
 import logging
 import re
+import shutil
 from pathlib import Path
 from typing import Callable, Optional
 
@@ -45,6 +46,17 @@ def _friendly(exc: Exception) -> str:
     return "No se pudo acceder al contenido."
 
 
+def js_runtimes() -> dict:
+    """
+    Runtime JavaScript para los retos de YouTube (yt-dlp EJS): Deno en la imagen Docker; en un
+    capturador de Windows basta con Node ≥ 22. Se usa el primero que esté instalado.
+    """
+    for name in ("deno", "node"):
+        if shutil.which(name):
+            return {name: {}}
+    return {}
+
+
 class YtDlpProvider:
     def __init__(self, provider_id: str, extractors: list[str], supports_live: bool, live_via_streamlink: bool = True):
         self.id = provider_id
@@ -66,6 +78,9 @@ class YtDlpProvider:
             "nocheckcertificate": False,
             "allow_unplayable_formats": False,
         }
+        runtimes = js_runtimes()
+        if runtimes:
+            opts["js_runtimes"] = runtimes
         opts.update(extra or {})
         return opts
 

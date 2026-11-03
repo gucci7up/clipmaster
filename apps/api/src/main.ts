@@ -4,7 +4,7 @@ import { NestFactory } from '@nestjs/core';
 import { NestExpressApplication } from '@nestjs/platform-express';
 import { DocumentBuilder, SwaggerModule } from '@nestjs/swagger';
 import cookieParser from 'cookie-parser';
-import { json, urlencoded } from 'express';
+import { json, raw, urlencoded } from 'express';
 import { Logger } from 'nestjs-pino';
 import { AppModule } from './app.module';
 import { env } from './config/env';
@@ -16,6 +16,8 @@ export function configureApp(app: INestApplication) {
   app.setGlobalPrefix('api');
   // Los workers envían transcripciones completas: límite mayor sólo en la API interna.
   app.use('/api/internal', json({ limit: '64mb' }));
+  // Los capturadores remotos suben el video en trozos binarios (ver AgentsController).
+  app.use('/api/capture-agent', raw({ type: 'application/octet-stream', limit: '16mb' }));
   app.use(json({ limit: '1mb' }));
   app.use(urlencoded({ extended: false, limit: '1mb' }));
   app.use(cookieParser());

@@ -1,16 +1,18 @@
 'use client';
 
-import { Cpu, ShieldCheck, Users } from 'lucide-react';
+import { Copy, Cpu, Laptop, ShieldCheck, Users } from 'lucide-react';
+import { useState } from 'react';
 import useSWR from 'swr';
 import { toast } from 'sonner';
 import { ErrorState, PageHeader } from '@/components/common';
-import { Badge, Button, Card, CardContent, CardHeader, CardTitle, Skeleton } from '@/components/ui';
+import { Badge, Button, Card, CardContent, CardDescription, CardHeader, CardTitle, ConfirmButton, Input, Skeleton } from '@/components/ui';
 import { api, ApiError } from '@/lib/api';
 import { useSession } from '@/lib/session';
-import { formatBytes, formatDate } from '@/lib/utils';
+import { formatBytes, formatDate, relativeTime } from '@/lib/utils';
 
 interface AdminUser { id: string; email: string; name: string; role: 'USER' | 'ADMIN'; disabled: boolean; storageUsedBytes: string | number; storageQuotaBytes: string | number; createdAt: string; _count: { projects: number } }
 interface Worker { role: string; device: string; busy: number; id?: string; processed?: number; model?: string; llm?: string | null; at?: number }
+interface CaptureAgent { id: string; name: string; tokenPrefix: string; createdAt: string; lastSeenAt: string | null; online: boolean }
 interface SystemInfo { queues: Record<string, Record<string, number>>; workers: Worker[] }
 
 export default function AdminPage() {
@@ -71,6 +73,8 @@ export default function AdminPage() {
           </CardContent>
         </Card>
 
+        <CaptureAgents />
+
         <Card>
           <CardHeader><CardTitle className="flex items-center gap-2"><Users className="size-4" /> Usuarios</CardTitle></CardHeader>
           <CardContent>
@@ -110,5 +114,88 @@ export default function AdminPage() {
         </Card>
       </div>
     </>
+  );
+}
+
+/** Capturadores remotos: PCs que descargan los enlaces de YouTube con su propia conexión. */
+function CaptureAgents() {
+  const { data: agents, error, mutate } = useSWR<CaptureAgent[]>('/admin/capture-agents', { refreshInterval: 15_000 });
+  const [name, setName] = useState('');
+  const [creating, setCreating] = useState(false);
+  const [token, setToken] = useState<string | null>(null);
+
+  async function create() {
+    setCreating(true);
+    try {
+      const res = await api<{ token: string }>('/admin/capture-agents', { method: 'POST', json: { name: name.trim() || 'Mi PC' } });
+      setToken(res.token);
+      setName('');
+      await mutate();
+    } catch (err) {
+      toast.error(err instanceof ApiError ? err.message : 'No se pudo crear el capturador');
+    } finally {
+      setCreating(false);
+    }
+  }
+
+  async function revoke(id: string) {
+    try {
+      await api(`/admin/capture-agents/${id}`, { method: 'DELETE' });
+      await mutate();
+      toast.success('Token revocado');
+    } catch (err) {
+      toast.error(err instanceof ApiError ? err.message : 'No se pudo revocar');
+    }
+  }
+
+  return (
+    <Card>
+      <CardHeader>
+        <CardTitle className="flex items-center gap-2"><Laptop className="size-4" /> Capturadores</CardTitle>
+        <CardDescription>
+          YouTube bloquea las descargas desde servidores. Un capturador en tu PC descarga esos enlaces con tu conexión y entrega el video aquí.
+          Ejecuta <code className="rounded bg-muted px-1">scripts\iniciar-capturador.ps1</code> y pega el token la primera vez.
+        </CardDescription>
+      </CardHeader>
+      <CardContent className="space-y-4">
+        <form className="flex gap-2" onSubmit={(e) => { e.preventDefault(); void create(); }}>
+          <Input placeholder="Nombre (ej. PC de casa)" maxLength={80} value={name} onChange={(e) => setName(e.target.value)} />
+          <Button type="submit" loading={creating}>Crear token</Button>
+        </form>
+        {token && (
+          <div className="space-y-2 rounded-lg border border-amber-500/40 bg-amber-500/5 p-3 text-sm">
+            <p className="font-medium">Copia el token ahora: no se volverá a mostrar.</p>
+            <div className="flex gap-2">
+              <Input readOnly value={token} className="font-mono text-xs" onFocus={(e) => e.currentTarget.select()} />
+              <Button type="button" variant="secondary" onClick={() => { void navigator.clipboard.writeText(token).then(() => toast.success('Token copiado')); }}><Copy className="size-4" /> Copiar</Button>
+            </div>
+            <Button type="button" size="sm" variant="ghost" onClick={() => setToken(null)}>Ya lo guardé</Button>
+          </div>
+        )}
+        {error && <ErrorState message={error.message} />}
+        {!agents ? <Skeleton className="h-16" /> : agents.length === 0 ? (
+          <p className="text-sm text-muted-foreground">Aún no hay capturadores.</p>
+        ) : (
+          <div className="overflow-x-auto">
+            <table className="w-full text-sm">
+              <thead className="text-left text-xs text-muted-foreground"><tr><th className="py-1.5">Nombre</th><th>Estado</th><th>Última conexión</th><th>Token</th><th /></tr></thead>
+              <tbody>
+                {agents.map((a) => (
+                  <tr key={a.id} className="border-t">
+                    <td className="py-2 font-medium">{a.name}</td>
+                    <td>{a.online ? <Badge variant="success">Conectado</Badge> : <Badge variant="secondary">Desconectado</Badge>}</td>
+                    <td className="text-xs">{a.lastSeenAt ? relativeTime(a.lastSeenAt) : 'Nunca'}</td>
+                    <td className="font-mono text-xs">{a.tokenPrefix}…</td>
+                    <td className="text-right">
+                      <ConfirmButton size="sm" variant="ghost" title="Revocar token" description={`El capturador «${a.name}» dejará de poder conectarse.`} confirmLabel="Revocar" onConfirm={() => revoke(a.id)}>Revocar</ConfirmButton>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </CardContent>
+    </Card>
   );
 }
