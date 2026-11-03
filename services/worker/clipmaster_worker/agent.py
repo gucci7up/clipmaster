@@ -14,7 +14,9 @@ from __future__ import annotations
 
 import logging
 import math
+import shutil
 import sys
+import tempfile
 import threading
 import time
 from pathlib import Path
@@ -34,6 +36,8 @@ log = logging.getLogger("clipmaster.agent")
 
 USER_ERRORS = (ProviderError, MediaError, ValueError)
 KEEPALIVE_SEC = 30
+# Una descarga larga ocupa varias veces el tamaño del video (pistas separadas, mezcla, normalización).
+MIN_FREE_GB = 20
 
 
 class AgentSettings(BaseSettings):
@@ -43,6 +47,8 @@ class AgentSettings(BaseSettings):
     agent_token: str = ""
     poll_sec: float = 5.0
     part_mb: int = 8
+    # Carpeta de trabajo temporal; conviene un disco con espacio (por defecto, el TEMP del sistema).
+    work_dir: str = ""
 
 
 class AgentError(RuntimeError):
@@ -140,14 +146,27 @@ class RemoteStorage:
 
 
 class Agent:
-    def __init__(self, api: AgentApi, poll_sec: float = 5.0, part_mb: int = 8):
+    def __init__(self, api: AgentApi, poll_sec: float = 5.0, part_mb: int = 8, work_dir: str = ""):
         self.api = api
         self.poll_sec = poll_sec
         self.part_bytes = part_mb * 1024 * 1024
+        self.work_dir = Path(work_dir or tempfile.gettempdir())
         self.settings = get_settings()
         self.processed = 0
 
+    def prepare_work_dir(self) -> None:
+        self.work_dir.mkdir(parents=True, exist_ok=True)
+        # Restos de trabajos interrumpidos (Ctrl+C, apagado): se retoman desde cero, así que se borran.
+        for stale in self.work_dir.glob("cm-agent-*"):
+            shutil.rmtree(stale, ignore_errors=True)
+        free_gb = shutil.disk_usage(self.work_dir).free / 1024 ** 3
+        log.info("Carpeta de trabajo: %s (%.0f GB libres)", self.work_dir, free_gb)
+        if free_gb < MIN_FREE_GB:
+            log.warning("Quedan menos de %d GB libres en %s: los videos largos pueden no caber. "
+                        "Usa CLIPMASTER_WORK_DIR para elegir otro disco.", MIN_FREE_GB, self.work_dir)
+
     def run_forever(self) -> None:
+        self.prepare_work_dir()
         info = self.api.hello()
         log.info("Conectado como «%s». Esperando enlaces…", info.get("name", "capturador"))
         idle_since = time.monotonic()
@@ -202,7 +221,8 @@ class Agent:
                     log.warning("No se pudo renovar el trabajo: %s", exc)
 
         ctx = JobContext(job_id=job.jobId, project_id=job.projectId, settings=self.settings, storage=None,  # type: ignore[arg-type]
-                         report=report, is_cancelled=cancelled.is_set)
+                         report=report, is_cancelled=cancelled.is_set,
+                         workdir=Path(tempfile.mkdtemp(prefix="cm-agent-", dir=self.work_dir)))
         ctx.storage = RemoteStorage(self.api, job.jobId, self.part_bytes,  # type: ignore[assignment]
                                     lambda p: ctx.progress("import", p, f"Subiendo al servidor ({p * 100:.0f} %)"))
         threading.Thread(target=keepalive, daemon=True).start()
@@ -239,7 +259,7 @@ def main() -> int:
         log.error("Faltan CLIPMASTER_SERVER y/o CLIPMASTER_AGENT_TOKEN")
         return 2
     try:
-        Agent(AgentApi(cfg.server, cfg.agent_token), cfg.poll_sec, cfg.part_mb).run_forever()
+        Agent(AgentApi(cfg.server, cfg.agent_token), cfg.poll_sec, cfg.part_mb, cfg.work_dir).run_forever()
     except KeyboardInterrupt:
         log.info("Capturador detenido")
     except AgentError as exc:

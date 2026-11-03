@@ -4,7 +4,7 @@
 
 | Suite | Comando | Resultado |
 |-------|---------|-----------|
-| Worker (unitarias + e2e real + proveedores LLM simulados) | `cd services/worker && .venv/Scripts/python -m pytest -q` | **83 passed** |
+| Worker (unitarias + e2e real + proveedores LLM simulados) | `cd services/worker && .venv/Scripts/python -m pytest -q` | **84 passed** |
 | API (unitarias) | `pnpm --filter @clipmaster/api test` | **20 passed** (la integración se omite sin BD) |
 | API (integración con PostgreSQL 17 real) | `TEST_DATABASE_URL=postgresql://… pnpm --filter @clipmaster/api test` | **31 passed** |
 | Compartido | `pnpm --filter @clipmaster/shared test` | **13 passed** |

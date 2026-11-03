@@ -84,6 +84,8 @@ $env:CLIPMASTER_SERVER = $cfg.server
 $env:CLIPMASTER_AGENT_TOKEN = $tokenPlain
 $env:PYTHONPATH = $worker
 $env:PYTHONUTF8 = '1'
+# Archivos temporales junto al repositorio (no en C:\, que suele ir justo de espacio).
+if (-not $env:CLIPMASTER_WORK_DIR) { $env:CLIPMASTER_WORK_DIR = Join-Path $worker '.capturador-trabajo' }
 while ($true) {
   & $venvPy -m clipmaster_worker.agent
   $code = $LASTEXITCODE

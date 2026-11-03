@@ -39,6 +39,10 @@ Opciones del script:
 - `-Reconfigurar`: cambia la dirección o el token.
 - `-InicioAutomatico`: crea un acceso directo en la carpeta de Inicio de Windows.
 
+Los archivos temporales van a `services/worker/.capturador-trabajo` (en el mismo disco que el repositorio) y se
+borran al terminar cada trabajo. Un video largo puede ocupar temporalmente 2–3 veces su tamaño; con menos de 20 GB
+libres el capturador lo avisa al arrancar. Para usar otra carpeta, define `CLIPMASTER_WORK_DIR`.
+
 Sin el script (cualquier sistema):
 
 ```bash

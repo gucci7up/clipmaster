@@ -130,3 +130,24 @@ def test_retries_transient_errors_and_stops_on_revoked_token(monkeypatch):
     revoked = AgentApi("https://clips.example.com", "cma_test", client=httpx.Client(transport=httpx.MockTransport(lambda r: httpx.Response(401))))
     with pytest.raises(AgentError, match="revocado"):
         revoked.hello()
+
+
+def test_work_dir_is_configurable_and_stale_jobs_are_removed(monkeypatch, tmp_path):
+    stale = tmp_path / "cm-agent-old"
+    stale.mkdir()
+    (stale / "source.mp4").write_bytes(b"x")
+    server = FakeServer()
+    seen = {}
+
+    def fake_import(ctx, job):
+        seen["workdir"] = ctx.workdir
+        raise ProviderError("El video no está disponible.")
+
+    monkeypatch.setattr("clipmaster_worker.capture.run_import", fake_import)
+    a = make_agent(server)
+    a.work_dir = tmp_path
+    a.prepare_work_dir()
+    assert not stale.exists()
+    a.run_job(JOB)
+    assert seen["workdir"].parent == tmp_path
+    assert not seen["workdir"].exists()  # se borra al terminar
