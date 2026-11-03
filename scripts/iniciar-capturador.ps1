@@ -1,4 +1,4 @@
-<#
+﻿<#
 .SYNOPSIS
   Inicia el capturador de ClipMaster en este PC: descarga los enlaces de YouTube con tu conexión
   y entrega el video a tu servidor. Sólo hace conexiones salientes HTTPS; no abre puertos.
