@@ -67,7 +67,10 @@ class Settings(BaseSettings):
     ollama_model: str = "qwen2.5:3b-instruct"
     nvidia_api_key: str = ""
     nvidia_base_url: str = "https://integrate.api.nvidia.com/v1"
-    nvidia_model: str = "meta/llama-3.3-70b-instruct"
+    nvidia_model: str = "nvidia/nemotron-3.5-lightning-30b-a3b"
+    # Modelos con "razonamiento" (Nemotron 3.5, etc.): se desactiva para obtener sólo el JSON, más rápido
+    # y con menos tokens. Ponlo a false si un modelo rechaza `chat_template_kwargs`.
+    nvidia_disable_thinking: bool = True
     llm_timeout_sec: float = 60.0
     llm_max_candidates: int = 12
 

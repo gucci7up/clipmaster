@@ -93,7 +93,7 @@ Sin GPU dedicada, Ollama compite por la CPU con Whisper; úsalo solo si tienes m
 ### 5b. LLM de NVIDIA (alternativa sin GPU local)
 
 1. Crea una clave en [build.nvidia.com](https://build.nvidia.com) (empieza por `nvapi-`).
-2. En *Environment*, pon `LLM_PROVIDER=nvidia` y `NVIDIA_API_KEY=nvapi-…`. Opcionalmente, `NVIDIA_MODEL`; por defecto es `meta/llama-3.3-70b-instruct`.
+2. En *Environment*, pon `LLM_PROVIDER=nvidia` y `NVIDIA_API_KEY=nvapi-…`. Opcionalmente, `NVIDIA_MODEL`; por defecto es `nvidia/nemotron-3.5-lightning-30b-a3b`.
 3. Redespliega el ai-worker. *Administración* mostrará `nvidia:<modelo>` en la columna LLM.
 4. Cada usuario activa «LLM semántico» en *Ajustes*, donde se le avisa de que los fragmentos de transcripción se envían a NVIDIA.
 

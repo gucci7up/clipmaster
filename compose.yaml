@@ -130,7 +130,8 @@ services:
       OLLAMA_MODEL: ${OLLAMA_MODEL:-qwen2.5:3b-instruct}
       NVIDIA_API_KEY: ${NVIDIA_API_KEY:-}
       NVIDIA_BASE_URL: ${NVIDIA_BASE_URL:-https://integrate.api.nvidia.com/v1}
-      NVIDIA_MODEL: ${NVIDIA_MODEL:-meta/llama-3.3-70b-instruct}
+      NVIDIA_MODEL: ${NVIDIA_MODEL:-nvidia/nemotron-3.5-lightning-30b-a3b}
+      NVIDIA_DISABLE_THINKING: ${NVIDIA_DISABLE_THINKING:-true}
     volumes:
       - ai-work:/data/work
       - models:/models

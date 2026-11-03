@@ -176,11 +176,12 @@ def _user_message(text: str, mode: str) -> str:
 
 
 _FENCE = re.compile(r"^```(?:json)?\s*|\s*```$", re.I)
+_THINK = re.compile(r"<think>.*?</think>", re.S | re.I)
 
 
 def parse_verdict(content: str) -> LLMVerdict:
-    """Extrae y valida el objeto JSON de la respuesta (tolera bloques ```json)."""
-    body = _FENCE.sub("", content.strip())
+    """Extrae y valida el objeto JSON de la respuesta (tolera bloques ```json y razonamiento <think>)."""
+    body = _FENCE.sub("", _THINK.sub("", content).strip())
     start, end = body.find("{"), body.rfind("}")
     if start < 0 or end <= start:
         raise json.JSONDecodeError("sin objeto JSON", body, 0)
@@ -217,6 +218,7 @@ def _judge_nvidia(settings: Settings, text: str, mode: str) -> str:
             "temperature": 0.2,
             "max_tokens": 400,
             "stream": False,
+            **({"chat_template_kwargs": {"enable_thinking": False}} if settings.nvidia_disable_thinking else {}),
             "messages": [
                 {"role": "system", "content": f"{SYSTEM_PROMPT}\nEsquema JSON: {json.dumps(LLM_SCHEMA, ensure_ascii=False)}"},
                 {"role": "user", "content": _user_message(text, mode)},

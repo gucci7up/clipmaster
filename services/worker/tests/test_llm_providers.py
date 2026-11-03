@@ -42,7 +42,7 @@ def test_nvidia_disabled_without_key():
     assert semantic.llm_available(Settings(llm_provider="nvidia")) is False
     assert semantic.llm_available(nvidia()) is True
     assert Settings(llm_provider="nvidia").llm_label is None
-    assert nvidia().llm_label == "nvidia:meta/llama-3.3-70b-instruct"
+    assert nvidia().llm_label == "nvidia:nvidia/nemotron-3.5-lightning-30b-a3b"
     assert Settings().llm_provider == "ollama" and Settings().llm_label is None
 
 
@@ -54,9 +54,22 @@ def test_nvidia_request_and_valid_verdict(capture):
     assert str(req.url) == "https://integrate.api.nvidia.com/v1/chat/completions"
     assert req.headers["authorization"] == "Bearer nvapi-test"
     body = json.loads(req.content)
-    assert body["model"] == "meta/llama-3.3-70b-instruct"
+    assert body["model"] == "nvidia/nemotron-3.5-lightning-30b-a3b"
+    assert body["chat_template_kwargs"] == {"enable_thinking": False}
     assert body["messages"][0]["role"] == "system" and "Esquema JSON" in body["messages"][0]["content"]
     assert "qué jugada" in body["messages"][1]["content"]
+
+
+def test_nvidia_thinking_can_be_left_enabled(capture):
+    calls = capture(lambda req: chat_completion(json.dumps(VALID)))
+    semantic.llm_judge(nvidia(nvidia_disable_thinking=False), "texto", "AUTO")
+    assert "chat_template_kwargs" not in json.loads(calls[0].content)
+
+
+def test_nvidia_ignores_inline_reasoning(capture):
+    capture(lambda req: chat_completion("<think>el usuario quiere {json} ...</think>\n" + json.dumps(VALID)))
+    v = semantic.llm_judge(nvidia(), "texto", "AUTO")
+    assert v is not None and v.title == VALID["title"]
 
 
 def test_nvidia_accepts_fenced_json(capture):

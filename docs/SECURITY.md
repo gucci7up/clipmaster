@@ -65,7 +65,8 @@ Se aplica en la validación, antes de descargar y **en cada redirección**:
   - es el único punto en que datos del usuario salen del servidor, y solo como fragmentos de transcripción de los candidatos;
   - hacen falta dos cosas: que el administrador ponga la clave y que el usuario active «LLM semántico»;
   - *Ajustes* muestra al usuario si el proveedor es NVIDIA antes de que lo active;
-  - la clave solo vive en el entorno del ai-worker, y nunca llega a la API, al navegador ni a los logs.
+  - la clave solo vive en el entorno del ai-worker, y nunca llega a la API, al navegador ni a los logs;
+  - **los términos del endpoint gratuito de NVIDIA indican que entradas y salidas pueden registrarse y usarse para mejorar sus productos**, y piden no enviar información confidencial ni datos personales. No lo actives para contenido de terceros o sensible; para eso usa Ollama local.
 - **Descargas de modelos de Whisper** (Hugging Face): solo la primera vez.
 - **Plataformas de video:** solo cuando el usuario importa una URL.
 
