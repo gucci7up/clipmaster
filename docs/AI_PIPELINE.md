@@ -113,7 +113,7 @@ No hay que tocar código de puntuación.
 
 ## 3. Render (`render.py`)
 
-1. **Corte.** FFmpeg con *input seeking* sobre la URL prefirmada de MinIO (no descarga el original entero). Los directos usan concat de segmentos.
+1. **Corte.** FFmpeg con *input seeking* sobre la URL prefirmada del almacenamiento S3 (no descarga el original entero). Los directos usan concat de segmentos.
 2. **Reencuadre.**
    - **auto:** sigue la trayectoria suavizada de rostros, o el centro de movimiento si no hay rostros. Se simplifica con Douglas-Peucker (24 puntos como máximo) y se aplica como expresión lineal a trozos en `t` dentro del filtro `crop`.
    - **center:** recorte centrado.

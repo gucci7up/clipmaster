@@ -1,7 +1,7 @@
 """
 Protección SSRF: sólo http(s) a hosts públicos. Se rechazan IPs privadas, loopback, link-local
 (incluido 169.254.169.254 de metadatos cloud), multicast, reservadas, nombres de un solo nivel
-(servicios Docker internos como "minio" o "postgres"), credenciales embebidas y puertos no estándar.
+(servicios Docker internos como "storage" o "postgres"), credenciales embebidas y puertos no estándar.
 Cada redirección se vuelve a validar.
 """
 

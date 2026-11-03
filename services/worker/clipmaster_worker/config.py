@@ -38,7 +38,7 @@ class Settings(BaseSettings):
 
     storage_backend: Literal["s3", "local"] = "s3"
     local_storage_dir: Path = Path("/data/storage")
-    s3_endpoint: str = "http://minio:9000"
+    s3_endpoint: str = "http://storage:9000"
     s3_region: str = "us-east-1"
     s3_access_key: str = ""
     s3_secret_key: str = ""

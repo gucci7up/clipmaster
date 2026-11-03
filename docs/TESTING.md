@@ -22,7 +22,7 @@ Usa un **video real generado localmente** (`tests/fixtures.py`, sin descargas):
 - una ráfaga de ruido modulado a 5 Hz entre los segundos 16 y 21, que imita risas;
 - una escena `testsrc2` con mucho movimiento entre los segundos 15 y 22.
 
-Sobre ese video se ejecuta el código de producción, con almacenamiento local en lugar de MinIO:
+Sobre ese video se ejecuta el código de producción, con almacenamiento local en lugar de S3:
 
 1. **Importación:** normalización y ffprobe (duración de 40 s ± 0,5 s, H.264/AAC).
 2. **Transcripción:** faster-whisper `tiny` en CPU. Se exigen texto y palabras con tiempos.

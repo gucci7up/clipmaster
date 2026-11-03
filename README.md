@@ -17,7 +17,7 @@ Navegador ──HTTPS──▶ Traefik (Dokploy) ─┬─ /     ▶ web (Next.j
                                capture-worker     ai-worker      render-worker   (Python)
                                yt-dlp/Streamlink  faster-whisper FFmpeg/libass
                                FFmpeg             OpenCV         NVENC opcional
-                                     └────────── MinIO (privado) ─────┘
+                                     └───────── RustFS / S3 (privado) ─┘
 ```
 
 ## Documentación
@@ -39,7 +39,7 @@ Requisitos:
 - Node 24 y pnpm 11;
 - Python 3.12;
 - FFmpeg 7 u 8 en el `PATH`;
-- PostgreSQL, Redis y un S3 compatible, como MinIO (para la API).
+- PostgreSQL, Redis y un S3 compatible, como RustFS (para la API).
 
 ```bash
 pnpm install

@@ -3,9 +3,9 @@
 ## Exposición de red
 
 - **Ningún contenedor publica puertos.** Traefik (de Dokploy) es la única entrada: `/` va a `web:3000` y `/api` va a `api:4000`.
-- Solo `web` y `api` están en `dokploy-network`. PostgreSQL, Redis, MinIO, los workers y Ollama viven en la red privada `backend`.
-- **MinIO es privado:**
-  - el bucket tiene una política que deniega el acceso anónimo y la consola está desactivada (`MINIO_BROWSER=off`);
+- Solo `web` y `api` están en `dokploy-network`. PostgreSQL, Redis, el almacenamiento S3 (RustFS), los workers y Ollama viven en la red privada `backend`.
+- **El almacenamiento S3 (RustFS) es privado:**
+  - el bucket tiene una política que deniega el acceso anónimo y la consola web está desactivada (`RUSTFS_CONSOLE_ENABLE=false`);
   - los medios se sirven a través de la API con **URLs firmadas HMAC** (`/api/media/:kind/:id?exp&sig`) que caducan (`MEDIA_URL_TTL_SEC`) y admiten `Range`;
   - el original solo se firma para su propietario.
 - **Endpoints internos** (`/api/internal/*`, que usan los workers):
@@ -41,7 +41,7 @@ Se aplica en la validación, antes de descargar y **en cada redirección**:
 
 - solo `http` y `https`, sin credenciales en la URL, y 2048 caracteres como máximo;
 - puertos permitidos: 80, 443, 8080 y 8443;
-- hosts bloqueados: `localhost`, `metadata`, `metadata.google.internal`, `instance-data`, los sufijos `.local`, `.internal`, `.localhost` y `.lan`, y los nombres de una sola etiqueta (por ejemplo `minio` o `redis`);
+- hosts bloqueados: `localhost`, `metadata`, `metadata.google.internal`, `instance-data`, los sufijos `.local`, `.internal`, `.localhost` y `.lan`, y los nombres de una sola etiqueta (por ejemplo `storage` o `redis`);
 - se resuelven **todas** las IPs del host y se rechazan las privadas, de loopback, link-local (incluida 169.254.169.254), CGNAT, multicast, reservadas, sin especificar y las IPv6 equivalentes, como las mapeadas `::ffff:`;
 - yt-dlp se ejecuta con `allowed_extractors` limitado a la plataforma detectada, así que el extractor genérico no puede convertirlo en un cliente HTTP arbitrario.
 

@@ -10,7 +10,7 @@ Código: `services/worker/clipmaster_worker/providers/`.
 
 | Proveedor | VOD / grabado | Directo | Mecanismo | Estado |
 |-----------|---------------|---------|-----------|--------|
-| **Subida MP4/MOV/WEBM/MKV** | ✅ | — | Multer → MinIO → ffprobe → normalización | **Verificado** con prueba e2e (video generado → clips MP4 validados con ffprobe) |
+| **Subida MP4/MOV/WEBM/MKV** | ✅ | — | Multer → almacenamiento S3 → ffprobe → normalización | **Verificado** con prueba e2e (video generado → clips MP4 validados con ffprobe) |
 | **URL directa .mp4/.webm/.mov** | ✅ | — | `httpx` con guardia SSRF en cada redirección | Probado con pruebas unitarias (guardia, detección); descarga real sin probar en CI |
 | **HLS `.m3u8`** | ✅ | ✅ | FFmpeg; se rechazan listas con `#EXT-X-KEY` / `#EXT-X-SESSION-KEY` de tipo `SAMPLE-AES` o con `KEYFORMAT` distinto de `identity` (DRM) | Implementado; sin prueba contra un stream público en CI |
 | **YouTube** | ⚠️ | ⚠️ | yt-dlp (`allowed_extractors` de YouTube) / Streamlink | *Best-effort*. YouTube bloquea a menudo IPs de servidores («confirm you're not a bot»). Si pasa, se informa y se pide subir el archivo. No se usan cookies |

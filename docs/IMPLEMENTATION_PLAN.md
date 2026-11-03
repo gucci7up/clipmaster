@@ -16,7 +16,7 @@ Leyenda:
 | Esquema Prisma (19 entidades) + migración inicial | ✅ | aplicada sobre PostgreSQL 17 real |
 | Auth (argon2id, sesiones, roles, recuperación por SMTP) | ✅ | unitarias; flujo HTTP sin probar en contenedor |
 | Colas BullMQ + protocolo de workers | 🟡 | orquestación probada con PostgreSQL; Redis real sin probar (ver `TESTING.md`) |
-| MinIO privado + URLs firmadas | 🟡 | firma y claves con unitarias; MinIO sin probar en ejecución |
+| Almacenamiento S3 privado (RustFS) + URLs firmadas | 🟡 | firma y claves con unitarias; RustFS sin probar en ejecución |
 | SSE de progreso | 🟡 | eventos persistidos probados; transporte SSE sin probar en navegador |
 | UI en español (oscuro/claro, responsive) | 🟡 | compila y pasa typecheck; sin prueba en navegador contra la API |
 | Docker Compose para Dokploy + overlay GPU | 🟡 | sintaxis validada; sin construir |
@@ -76,7 +76,7 @@ Leyenda:
 1. **No había Docker en la máquina de desarrollo.** El primer despliegue es también la primera ejecución de los contenedores.
 2. **Plataformas de video:** YouTube, Kick y otras bloquean a menudo IPs de centros de datos. No se implementará ninguna evasión.
 3. **GPU Pascal y CTranslate2:** puede requerir `float32` / `int8_float32` o quedarse en CPU.
-4. **MinIO** dejó de publicar imágenes comunitarias nuevas. La versión está fijada y se puede cambiar con `MINIO_IMAGE` (o usar cualquier S3 compatible).
+4. **MinIO** retiró sus imágenes de Docker Hub (`pull access denied` en el primer despliegue). Se sustituyó por **RustFS** (`rustfs/rustfs:1.0.4`), compatible con S3. Se puede cambiar con `STORAGE_IMAGE` o apuntar `S3_ENDPOINT` a cualquier S3 compatible.
 
 ## Decisiones registradas
 

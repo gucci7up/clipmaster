@@ -8,7 +8,7 @@ Servidor objetivo: Ubuntu 24.04, i5 de 14.ª generación y 32 GB de RAM. GPU opc
 
 - Dokploy instalado (incluye Docker y Traefik con HTTPS).
 - Un registro DNS `A` del dominio (por ejemplo `clips.example.com`) apuntando al servidor.
-- Disco: los originales, los segmentos y los clips viven en el volumen de MinIO. Reserva espacio según tu uso; como referencia, una hora de 1080p normalizado ocupa unos 1–3 GB.
+- Disco: los originales, los segmentos y los clips viven en el volumen `storagedata` (RustFS). Reserva espacio según tu uso; como referencia, una hora de 1080p normalizado ocupa unos 1–3 GB.
 - **Solo con GPU:**
 
   ```bash
@@ -26,7 +26,7 @@ Servidor objetivo: Ubuntu 24.04, i5 de 14.ª generación y 32 GB de RAM. GPU opc
 2. Proveedor: tu repositorio Git (rama `main`). *Compose Path*: `./compose.yaml`.
 3. **Environment:** copia `.env.example` y rellena todos los secretos. Genera cada uno con `openssl rand -base64 48`:
    - `SESSION_SECRET`, `MEDIA_SIGNING_SECRET`, `INTERNAL_API_TOKEN`;
-   - `POSTGRES_PASSWORD`, `REDIS_PASSWORD`, `MINIO_ROOT_PASSWORD`;
+   - `POSTGRES_PASSWORD`, `REDIS_PASSWORD`, `MINIO_ROOT_PASSWORD` (credenciales del almacenamiento S3; el nombre se conserva por compatibilidad);
    - `PUBLIC_URL=https://clips.example.com`;
    - `ADMIN_EMAIL` y `ADMIN_PASSWORD` (12 caracteres o más) para el primer administrador.
 
@@ -50,7 +50,7 @@ Al arrancar, la API:
 ## 3. Red y exposición
 
 - Ningún servicio publica puertos en el host. Traefik llega a `web` y `api` por `dokploy-network`.
-- PostgreSQL, Redis, MinIO y los workers solo están en la red `backend`.
+- PostgreSQL, Redis, el almacenamiento (`storage`) y los workers solo están en la red `backend`.
 - Para inspeccionar algo interno, usa la terminal del contenedor en Dokploy. No abras puertos.
 
 ## 4. GPU
@@ -116,7 +116,7 @@ El ai-worker descarga el modelo de Hugging Face la primera vez y lo guarda en el
   ```
 
   También puedes usar las copias programadas de Dokploy.
-- **MinIO:** copia el volumen `miniodata` con el servicio parado, o usa `mc mirror` desde un contenedor en la red `backend`.
+- **Almacenamiento (RustFS):** copia el volumen `storagedata` con el servicio `storage` parado, o sincroniza el bucket con cualquier cliente S3 (`aws s3 sync`, `rclone`) desde un contenedor en la red `backend`.
 - `models` y los volúmenes `*-work` no necesitan copia.
 
 ## 8. Mantenimiento y disco
