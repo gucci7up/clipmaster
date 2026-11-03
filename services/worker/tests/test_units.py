@@ -233,3 +233,18 @@ def test_resegment_splits_long_whisper_segments():
     out = resegment([{"start": 0, "end": 30, "text": "x", "words": words}])
     assert [s["text"] for s in out] == ["Hola a todos.", "Hoy probamos esto.", "Y luego seguimos hablando."]
     assert out[1]["start"] == words[3]["start"]
+
+
+@pytest.mark.parametrize("raw, expected", [
+    ("ERROR: [youtube] abc: Sign in to confirm you’re not a bot. Use --cookies", "verificación anti-bot"),
+    ("ERROR: [youtube] abc: Sign in to confirm you're not a bot", "verificación anti-bot"),
+    ("ERROR: HTTP Error 429: Too Many Requests", "verificación anti-bot"),
+    ("ERROR: [youtube] abc: Private video. Sign in if you've been granted access", "privado"),
+    ("ERROR: [youtube] abc: Sign in to confirm your age", "privado"),
+    ("ERROR: [youtube] abc: Video unavailable", "no está disponible"),
+    ("ERROR: Unable to download webpage: page not found", "No se pudo acceder"),
+])
+def test_friendly_platform_errors(raw, expected):
+    from clipmaster_worker.providers.platforms import _friendly
+
+    assert expected in _friendly(Exception(raw))

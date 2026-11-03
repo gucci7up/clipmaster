@@ -10,6 +10,7 @@ inicio de sesión se rechaza con un mensaje claro.
 from __future__ import annotations
 
 import logging
+import re
 from pathlib import Path
 from typing import Callable, Optional
 
@@ -18,15 +19,22 @@ from .base import DownloadProgress, ProviderError, Validation
 
 log = logging.getLogger(__name__)
 
-_AUTH_HINTS = ("sign in", "login", "log in", "private", "members-only", "subscriber", "premium", "age", "confirm your age")
+_AUTH_HINTS = re.compile(r"sign in|log ?in|private|members-only|subscriber|premium|\bage\b|age-restricted|confirm your age")
+# YouTube responde «Sign in to confirm you're not a bot» a las IPs de centros de datos: es un bloqueo
+# de la plataforma, no contenido privado, así que se comprueba antes que las pistas de autenticación.
+_BLOCK_HINTS = re.compile(r"not a bot|captcha|too many requests|http error 429|http error 403|cloudflare")
 _DRM_HINTS = ("drm",)
 
 
 def _friendly(exc: Exception) -> str:
-    msg = str(exc).lower()
+    msg = str(exc).lower().replace("’", "'")
+    log.warning("yt-dlp: %s", str(exc)[:500])
     if any(h in msg for h in _DRM_HINTS):
         return "El contenido está protegido con DRM y no puede procesarse."
-    if any(h in msg for h in _AUTH_HINTS):
+    if _BLOCK_HINTS.search(msg):
+        return ("La plataforma bloqueó el acceso desde este servidor (verificación anti-bot). "
+                "Descarga tu video y súbelo como archivo.")
+    if _AUTH_HINTS.search(msg):
         return "El contenido es privado o requiere iniciar sesión. Sube tu propia grabación."
     if "not currently live" in msg or "is offline" in msg or "not live" in msg:
         return "La transmisión no está en vivo en este momento."
@@ -34,8 +42,6 @@ def _friendly(exc: Exception) -> str:
         return "El video no está disponible."
     if "unsupported url" in msg:
         return "URL no compatible con este proveedor."
-    if "bot" in msg or "429" in msg or "403" in msg or "cloudflare" in msg:
-        return "La plataforma bloqueó el acceso automatizado. Inténtalo más tarde o sube tu grabación."
     return "No se pudo acceder al contenido."
 
 
