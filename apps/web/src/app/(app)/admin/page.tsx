@@ -1,11 +1,11 @@
 'use client';
 
-import { Copy, Cpu, Laptop, ShieldCheck, Users } from 'lucide-react';
+import { Copy, Cpu, Laptop, ShieldCheck, UserPlus, Users } from 'lucide-react';
 import { useState } from 'react';
 import useSWR from 'swr';
 import { toast } from 'sonner';
 import { ErrorState, PageHeader } from '@/components/common';
-import { Badge, Button, Card, CardContent, CardDescription, CardHeader, CardTitle, ConfirmButton, Input, Skeleton } from '@/components/ui';
+import { Badge, Button, Card, CardContent, CardDescription, CardHeader, CardTitle, ConfirmButton, Input, Label, Select, Skeleton } from '@/components/ui';
 import { api, ApiError } from '@/lib/api';
 import { useSession } from '@/lib/session';
 import { formatBytes, formatDate, relativeTime } from '@/lib/utils';
@@ -77,7 +77,8 @@ export default function AdminPage() {
 
         <Card>
           <CardHeader><CardTitle className="flex items-center gap-2"><Users className="size-4" /> Usuarios</CardTitle></CardHeader>
-          <CardContent>
+          <CardContent className="space-y-4">
+            <CreateUser onCreated={() => mutate()} />
             {error && <ErrorState message={error.message} />}
             {!users ? <Skeleton className="h-32" /> : (
               <div className="overflow-x-auto">
@@ -114,6 +115,82 @@ export default function AdminPage() {
         </Card>
       </div>
     </>
+  );
+}
+
+/** Alta de usuarios por el administrador (no depende de que el registro público esté abierto). */
+function CreateUser({ onCreated }: { onCreated: () => Promise<unknown> }) {
+  const empty = { name: '', email: '', password: '', role: 'USER' as 'USER' | 'ADMIN', quotaGb: '' };
+  const [open, setOpen] = useState(false);
+  const [form, setForm] = useState(empty);
+  const [busy, setBusy] = useState(false);
+  const [created, setCreated] = useState<{ email: string; password: string } | null>(null);
+  const set = (k: keyof typeof empty, v: string) => setForm((f) => ({ ...f, [k]: v }));
+
+  async function submit() {
+    if (form.password && form.password.length < 10) return toast.error('La contraseña debe tener al menos 10 caracteres');
+    setBusy(true);
+    try {
+      const res = await api<{ user: { email: string }; generatedPassword: string | null }>('/admin/users', {
+        method: 'POST',
+        json: {
+          name: form.name.trim(), email: form.email.trim(), role: form.role,
+          password: form.password || undefined,
+          quotaGb: form.quotaGb ? Number(form.quotaGb) : undefined,
+        },
+      });
+      if (res.generatedPassword) setCreated({ email: res.user.email, password: res.generatedPassword });
+      toast.success(`Usuario ${res.user.email} creado`);
+      setForm(empty);
+      setOpen(false);
+      await onCreated();
+    } catch (err) {
+      toast.error(err instanceof ApiError ? err.message : 'No se pudo crear el usuario');
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  return (
+    <div className="space-y-3">
+      {!open && <Button type="button" variant="outline" onClick={() => { setOpen(true); setCreated(null); }}><UserPlus className="size-4" /> Nuevo usuario</Button>}
+      {open && (
+        <form className="space-y-3 rounded-lg border p-3" onSubmit={(e) => { e.preventDefault(); void submit(); }}>
+          <div className="grid gap-3 sm:grid-cols-2">
+            <div className="space-y-1"><Label htmlFor="nu-name">Nombre</Label><Input id="nu-name" required minLength={2} maxLength={80} value={form.name} onChange={(e) => set('name', e.target.value)} /></div>
+            <div className="space-y-1"><Label htmlFor="nu-email">Correo</Label><Input id="nu-email" type="email" required maxLength={254} autoComplete="off" value={form.email} onChange={(e) => set('email', e.target.value)} /></div>
+            <div className="space-y-1">
+              <Label htmlFor="nu-pass">Contraseña</Label>
+              <Input id="nu-pass" type="password" minLength={10} maxLength={200} autoComplete="new-password" placeholder="Vacía = generar una aleatoria" value={form.password} onChange={(e) => set('password', e.target.value)} />
+            </div>
+            <div className="grid grid-cols-2 gap-3">
+              <div className="space-y-1">
+                <Label htmlFor="nu-role">Rol</Label>
+                <Select id="nu-role" value={form.role} onChange={(e) => set('role', e.target.value)}>
+                  <option value="USER">Usuario</option><option value="ADMIN">Administrador</option>
+                </Select>
+              </div>
+              <div className="space-y-1"><Label htmlFor="nu-quota">Cuota (GB)</Label><Input id="nu-quota" type="number" min={1} max={100000} placeholder="Por defecto" value={form.quotaGb} onChange={(e) => set('quotaGb', e.target.value)} /></div>
+            </div>
+          </div>
+          <div className="flex gap-2">
+            <Button type="submit" loading={busy}>Crear usuario</Button>
+            <Button type="button" variant="ghost" onClick={() => { setOpen(false); setForm(empty); }}>Cancelar</Button>
+          </div>
+        </form>
+      )}
+      {created && (
+        <div className="space-y-2 rounded-lg border border-amber-500/40 bg-amber-500/5 p-3 text-sm">
+          <p className="font-medium">Contraseña generada para {created.email}. Cópiala ahora: no se volverá a mostrar.</p>
+          <div className="flex gap-2">
+            <Input readOnly value={created.password} className="font-mono text-xs" onFocus={(e) => e.currentTarget.select()} />
+            <Button type="button" variant="secondary" onClick={() => { void navigator.clipboard.writeText(created.password).then(() => toast.success('Contraseña copiada')); }}><Copy className="size-4" /> Copiar</Button>
+          </div>
+          <p className="text-xs text-muted-foreground">El usuario puede cambiarla luego desde Ajustes.</p>
+          <Button type="button" size="sm" variant="ghost" onClick={() => setCreated(null)}>Ya la guardé</Button>
+        </div>
+      )}
+    </div>
   );
 }
 

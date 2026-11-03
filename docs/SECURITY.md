@@ -20,7 +20,7 @@
   - en la base de datos solo se guarda su SHA-256;
   - cambiar la contraseña o desactivar el usuario revoca todas las sesiones.
 - Roles `USER` y `ADMIN`. Todo recurso se consulta filtrando por `userId`. Las claves de almacenamiento incluyen `userId/projectId` y se comprueban con `keyBelongsTo`.
-- El registro público está desactivado por defecto en compose (`ALLOW_REGISTRATION=false`). El administrador inicial se crea desde `ADMIN_EMAIL` y `ADMIN_PASSWORD`.
+- El registro público está desactivado por defecto en compose (`ALLOW_REGISTRATION=false`). El administrador inicial se crea desde `ADMIN_EMAIL` y `ADMIN_PASSWORD`. Los demás usuarios los crea un administrador desde **Administración → Usuarios → Nuevo usuario** (con contraseña propia o generada, que se muestra una sola vez y no se guarda en el registro de auditoría).
 - La recuperación de contraseña solo existe si hay `SMTP_URL`. Los tokens son de un solo uso, caducan y se guardan como hash.
 
 ## Capturador remoto

@@ -1,10 +1,12 @@
-import { Body, Controller, Get, NotFoundException, Param, ParseUUIDPipe, Patch, Put } from '@nestjs/common';
-import { ApiPropertyOptional, ApiTags } from '@nestjs/swagger';
+import { Body, Controller, Get, NotFoundException, Param, ParseUUIDPipe, Patch, Post, Put } from '@nestjs/common';
+import { ApiProperty, ApiPropertyOptional, ApiTags } from '@nestjs/swagger';
 import { AspectRatio, ContentMode, Prisma, Role } from '@prisma/client';
 import { Type } from 'class-transformer';
-import { IsBoolean, IsEnum, IsIn, IsInt, IsObject, IsOptional, IsString, Max, MaxLength, Min } from 'class-validator';
+import { IsBoolean, IsEmail, IsEnum, IsIn, IsInt, IsObject, IsOptional, IsString, Length, Max, MaxLength, Min, MinLength } from 'class-validator';
+import { randomBytes } from 'node:crypto';
 import { MODES, PROVIDERS, SignalWeights, SubtitleStyle } from '@clipmaster/shared';
 import { AuthUser, CurrentUser, Roles } from '../auth/auth.guard';
+import { AuthService } from '../auth/auth.service';
 import { AuditService } from '../common/audit.service';
 import { PrismaService } from '../common/prisma.service';
 import { RedisService } from '../common/redis.service';
@@ -34,10 +36,24 @@ class AdminUpdateUserDto {
   @ApiPropertyOptional() @IsOptional() @Type(() => Number) @IsInt() @Min(1) @Max(100000) quotaGb?: number;
 }
 
+class AdminCreateUserDto {
+  @ApiProperty() @IsEmail() @MaxLength(254) email: string;
+  @ApiProperty() @IsString() @Length(2, 80) name: string;
+  /** Si se omite, se genera una contraseña aleatoria que se devuelve una sola vez. */
+  @ApiPropertyOptional({ minLength: 10 }) @IsOptional() @IsString() @MinLength(10) @MaxLength(200) password?: string;
+  @ApiPropertyOptional({ enum: Role }) @IsOptional() @IsEnum(Role) role?: Role;
+  @ApiPropertyOptional() @IsOptional() @Type(() => Number) @IsInt() @Min(1) @Max(100000) quotaGb?: number;
+}
+
 @ApiTags('settings')
 @Controller()
 export class SettingsController {
-  constructor(private readonly prisma: PrismaService, private readonly audit: AuditService, private readonly redis: RedisService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly audit: AuditService,
+    private readonly redis: RedisService,
+    private readonly auth: AuthService,
+  ) {}
 
   @Get('settings')
   async get(@CurrentUser() user: AuthUser) {
@@ -117,6 +133,22 @@ export class SettingsController {
       select: { id: true, email: true, name: true, role: true, disabled: true, storageUsedBytes: true, storageQuotaBytes: true, createdAt: true, _count: { select: { projects: true } } },
     });
     return toJSONSafe(users);
+  }
+
+  /** Alta de usuarios por un administrador; funciona aunque el registro público esté deshabilitado. */
+  @Roles(Role.ADMIN)
+  @Post('admin/users')
+  async createUser(@CurrentUser() admin: AuthUser, @Body() dto: AdminCreateUserDto) {
+    const generated = dto.password ? null : randomBytes(12).toString('base64url');
+    const created = await this.auth.createUser(dto.email, dto.name, dto.password ?? generated!, dto.role ?? Role.USER);
+    const user = dto.quotaGb
+      ? await this.prisma.user.update({ where: { id: created.id }, data: { storageQuotaBytes: BigInt(dto.quotaGb) * 1024n ** 3n } })
+      : created;
+    await this.audit.log(admin.id, 'admin.user_created', user.id, null, { role: user.role, quotaGb: dto.quotaGb ?? null });
+    return {
+      user: toJSONSafe({ id: user.id, email: user.email, name: user.name, role: user.role, storageQuotaBytes: user.storageQuotaBytes }),
+      generatedPassword: generated,
+    };
   }
 
   @Roles(Role.ADMIN)

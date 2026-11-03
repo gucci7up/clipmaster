@@ -6,7 +6,7 @@
 |-------|---------|-----------|
 | Worker (unitarias + e2e real + proveedores LLM simulados) | `cd services/worker && .venv/Scripts/python -m pytest -q` | **91 passed** |
 | API (unitarias) | `pnpm --filter @clipmaster/api test` | **23 passed** (la integración se omite sin BD) |
-| API (integración con PostgreSQL 17 real) | `TEST_DATABASE_URL=postgresql://… pnpm --filter @clipmaster/api test` | **39 passed** |
+| API (integración con PostgreSQL 17 real) | `TEST_DATABASE_URL=postgresql://… pnpm --filter @clipmaster/api test` | **42 passed** |
 | Compartido | `pnpm --filter @clipmaster/shared test` | **13 passed** |
 | Web (utilidades) | `pnpm --filter @clipmaster/web test` | **3 passed** |
 | Tipos | `pnpm -r typecheck` | sin errores |
