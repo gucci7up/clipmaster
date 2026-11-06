@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import base64
+import json
 
 import httpx
 import pytest
@@ -65,9 +66,44 @@ def test_portada_espera_la_cola_nvcf_y_guarda_la_imagen(tmp_path):
     out = nv.cover_image(KEY, "cancha de voleibol de noche", "VERTICAL", tmp_path / "c.jpg", poll_interval=0,
                          client=client(lambda r: next(replies), calls))
     assert out.read_bytes() == JPEG
-    assert calls[0].method == "POST" and calls[0].url.path.endswith(f"/pexec/functions/{KEY.nvidia_image_function}")
-    assert b'"width":768' in calls[0].content.replace(b" ", b"") and b'"height":1344' in calls[0].content.replace(b" ", b"")
+    assert calls[0].method == "POST" and calls[0].url.path.endswith("/pexec/functions/f67e96d8-1c4e-422e-a913-90f00e19aa9a")
+    body = json.loads(calls[0].content)
+    assert body["width"] == 768 and body["height"] == 1344 and body["steps"] == 4 and "mode" not in body
     assert [c.url.path for c in calls[1:]] == ["/v2/nvcf/pexec/status/req-1"] * 2
+
+
+def test_portada_con_flux1_dev_usa_su_funcion_y_parametros(tmp_path):
+    calls: list[httpx.Request] = []
+    ok = httpx.Response(200, json={"artifacts": [{"base64": base64.b64encode(JPEG).decode(), "finishReason": "SUCCESS"}]})
+    dev = Settings(nvidia_api_key="nvapi-test", nvidia_image_model="flux1-dev")
+    nv.cover_image(dev, "mesa de dominó", "HORIZONTAL", tmp_path / "c.jpg", client=client(lambda r: ok, calls))
+    assert calls[0].url.path.endswith("/pexec/functions/0c474133-6fd2-42f6-be29-8ebbbaeaaeb2")
+    body = json.loads(calls[0].content)
+    assert body == {"prompt": "mesa de dominó", "mode": "base", "cfg_scale": 3.5, "steps": 30,
+                    "width": 1344, "height": 768, "seed": 0}
+    # Un ID explícito sustituye al conocido; un modelo desconocido no se acepta.
+    override = Settings(nvidia_api_key="nvapi-test", nvidia_image_model="flux1-dev", nvidia_image_function="otro-id")
+    assert nv.image_function(override) == "otro-id"
+    with pytest.raises(Exception):
+        Settings(nvidia_image_model="sdxl")
+
+
+def test_si_flux1_dev_no_responde_se_genera_con_klein(tmp_path):
+    calls: list[httpx.Request] = []
+    ok = httpx.Response(200, json={"artifacts": [{"base64": base64.b64encode(JPEG).decode(), "finishReason": "SUCCESS"}]})
+    dev = Settings(nvidia_api_key="nvapi-test", nvidia_image_model="flux1-dev")
+    out = nv.cover_image(dev, "mesa de dominó", "SQUARE", tmp_path / "c.jpg",
+                         client=client(lambda r: httpx.Response(504) if "0c474133" in r.url.path else ok, calls))
+    assert out.read_bytes() == JPEG
+    assert [c.url.path.rsplit("/", 1)[1][:8] for c in calls] == ["0c474133", "f67e96d8"]
+    assert json.loads(calls[1].content)["steps"] == 4 and calls[0].headers["nvcf-poll-seconds"] == "20"
+    # Con klein no hay a qué recurrir; un 4xx (clave, créditos) tampoco provoca el cambio.
+    with pytest.raises(nv.NvidiaMediaError, match="no está disponible"):
+        nv.cover_image(KEY, "algo", "SQUARE", tmp_path / "c.jpg", client=client(lambda r: httpx.Response(504), []))
+    calls.clear()
+    with pytest.raises(nv.NvidiaMediaError, match="límite"):
+        nv.cover_image(dev, "algo", "SQUARE", tmp_path / "c.jpg", client=client(lambda r: httpx.Response(429), calls))
+    assert len(calls) == 1
 
 
 def test_portada_rechaza_filtro_de_contenido_y_basura(tmp_path):

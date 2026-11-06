@@ -1,5 +1,5 @@
 """
-Miniatura de un clip: un fotograma del video encuadrado sobre el sujeto (o una imagen de FLUX.2 klein si el
+Miniatura de un clip: un fotograma del video encuadrado sobre el sujeto (o una imagen de FLUX si el
 usuario lo eligió) con un texto grande encima, al tamaño de cada red (1080×1920 vertical, 1280×720 YouTube).
 El texto se compone con libass, igual que los subtítulos, para usar las mismas fuentes.
 """

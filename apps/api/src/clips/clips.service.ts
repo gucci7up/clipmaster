@@ -266,7 +266,7 @@ export class ClipsService {
 
   /**
    * Miniatura con texto: fotograma del clip (o fondo de IA) con un título grande. El fondo de IA usa
-   * FLUX.2 klein de NVIDIA, así que exige el permiso «Funciones de IA de NVIDIA».
+   * FLUX de NVIDIA, así que exige el permiso «Funciones de IA de NVIDIA».
    */
   async generateThumbnail(userId: string, id: string, input: ThumbnailInput) {
     const clip = await this.owned(userId, id);

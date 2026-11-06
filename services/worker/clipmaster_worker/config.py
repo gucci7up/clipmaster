@@ -85,7 +85,13 @@ class Settings(BaseSettings):
     nvidia_eyecontact_function: str = "480bffcb-6fea-4571-9741-eb50212c9c0f"
     nvidia_relight_function: str = "253bc77f-2d6c-4b9d-86c6-c6fb0f9e239c"
     nvidia_tts_url: str = "https://877104f7-e885-42b9-8de8-f6e4c6303969.invocation.api.nvcf.nvidia.com/v1/audio/synthesize"
-    nvidia_image_function: str = "f67e96d8-1c4e-422e-a913-90f00e19aa9a"  # FLUX.2 klein 4B (Apache 2.0)
+    # Modelo de imagen para portadas y miniaturas con fondo IA:
+    # - flux2-klein: FLUX.2 klein 4B, licencia Apache 2.0 (uso comercial libre). Predeterminado.
+    # - flux1-dev: FLUX.1-dev, más realista, pero su licencia sólo permite usar el modelo sin fines comerciales
+    #   (las imágenes sí pueden usarse comercialmente). Para cobrar por el servicio hace falta licencia de BFL.
+    nvidia_image_model: Literal["flux2-klein", "flux1-dev"] = "flux2-klein"
+    # Opcional: otro ID de función NVCF para el modelo elegido (si NVIDIA lo rota). Vacío = el conocido.
+    nvidia_image_function: str = ""
     nvidia_media_timeout_sec: float = 300.0
 
     render_encoder: Literal["auto", "libx264", "h264_nvenc"] = "auto"

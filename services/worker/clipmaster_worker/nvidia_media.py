@@ -5,7 +5,7 @@ prompt de la portada a los servidores de NVIDIA.
 
 - Mirada a cámara (Maxine Eye Contact) y reiluminación (Maxine Relighting): gRPC con streaming.
 - Voz del título gancho: Magpie TTS multilingüe (HTTP).
-- Portada: FLUX.2 klein 4B (HTTP con cola NVCF).
+- Portada: FLUX.2 klein 4B o FLUX.1-dev según NVIDIA_IMAGE_MODEL (HTTP con cola NVCF).
 
 Cada función devuelve un archivo local o lanza NvidiaMediaError; el render decide si continúa sin el efecto.
 """
@@ -31,8 +31,20 @@ NVCF = "https://api.nvcf.nvidia.com/v2/nvcf"
 # Presets de iluminación incluidos en el servicio (hdri_preset_id).
 RELIGHT_PRESETS = {0: "Salón", 1: "Calle de noche", 2: "Invernadero", 3: "París", 4: "Estudio de madera"}
 
-# Tamaños que acepta FLUX.2 klein por formato del clip.
+# Tamaños que aceptan los modelos FLUX de NVIDIA por formato del clip.
 COVER_SIZES = {"VERTICAL": (768, 1344), "SQUARE": (1024, 1024), "HORIZONTAL": (1344, 768)}
+
+# Modelos de imagen: función NVCF pública y parámetros propios de cada uno.
+IMAGE_MODELS: dict[str, tuple[str, dict]] = {
+    # FLUX.2 klein 4B (Apache 2.0): destilado, 4 pasos.
+    "flux2-klein": ("f67e96d8-1c4e-422e-a913-90f00e19aa9a", {"steps": 4}),
+    # FLUX.1-dev (licencia no comercial para el modelo): más realista, ~6 s con 30 pasos.
+    "flux1-dev": ("0c474133-6fd2-42f6-be29-8ebbbaeaaeb2", {"mode": "base", "cfg_scale": 3.5, "steps": 30}),
+}
+
+
+def image_function(settings: Settings) -> str:
+    return settings.nvidia_image_function or IMAGE_MODELS[settings.nvidia_image_model][0]
 
 
 class NvidiaMediaError(Exception):
@@ -162,33 +174,57 @@ def synthesize(settings: Settings, text: str, voice: str, out: Path, *, client: 
     return out
 
 
-# ------------------------------------------------------------------ portada (FLUX.2 klein)
+# ------------------------------------------------------------------ portada (FLUX)
+
+
+class NvidiaUnavailable(NvidiaMediaError):
+    """El modelo no respondió (5xx, tiempo agotado o red): puede probarse otro."""
 
 
 def cover_image(settings: Settings, prompt: str, aspect: str, out: Path, *, seed: int = 0,
                 client: httpx.Client | None = None, poll_interval: float = 1.0) -> Path:
-    """Genera la portada con FLUX.2 klein 4B. La invocación NVCF puede quedar en cola (202 + NVCF-REQID)."""
+    """Genera la imagen con el modelo FLUX configurado (NVIDIA_IMAGE_MODEL). Si FLUX.1-dev no responde (las
+    funciones gratuitas de NVIDIA a veces devuelven 504), se genera con FLUX.2 klein y se deja constancia en el log."""
     _check(settings)
     prompt = " ".join(prompt.split())[:600]
     if len(prompt) < 3:
         raise NvidiaMediaError("Portada IA: el prompt está vacío")
+    model = settings.nvidia_image_model
+    try:
+        return _flux(settings, image_function(settings), model, prompt, aspect, out, seed, client, poll_interval)
+    except NvidiaUnavailable as exc:
+        if model == "flux2-klein":
+            raise
+        log.warning("%s no respondió (%s); se genera con flux2-klein", model, exc)
+        return _flux(settings, IMAGE_MODELS["flux2-klein"][0], "flux2-klein", prompt, aspect, out, seed, client,
+                     poll_interval)
+
+
+def _flux(settings: Settings, function_id: str, model: str, prompt: str, aspect: str, out: Path, seed: int,
+          client: httpx.Client | None, poll_interval: float) -> Path:
+    """Una invocación NVCF; puede quedar en cola (202 + NVCF-REQID) y se sondea hasta el límite configurado."""
     width, height = COVER_SIZES.get(aspect, COVER_SIZES["VERTICAL"])
-    headers = {"Authorization": f"Bearer {settings.nvidia_api_key}", "Accept": "application/json"}
+    # NVCF retiene la petición hasta NVCF-POLL-SECONDS antes de responder 202; se mantiene por debajo del
+    # timeout de lectura para que un arranque en frío no corte la conexión y se siga con el sondeo.
+    headers = {"Authorization": f"Bearer {settings.nvidia_api_key}", "Accept": "application/json",
+               "NVCF-POLL-SECONDS": "20"}
     http = client or httpx.Client(timeout=60)
     try:
-        r = http.post(f"{NVCF}/pexec/functions/{settings.nvidia_image_function}", headers=headers,
-                      json={"prompt": prompt, "width": width, "height": height, "steps": 4, "seed": seed})
+        r = http.post(f"{NVCF}/pexec/functions/{function_id}", headers=headers,
+                      json={"prompt": prompt, **IMAGE_MODELS[model][1], "width": width, "height": height, "seed": seed})
         deadline = time.monotonic() + settings.nvidia_media_timeout_sec
         while r.status_code == 202:
             if time.monotonic() > deadline:
-                raise NvidiaMediaError("Portada IA: NVIDIA no respondió a tiempo")
+                raise NvidiaUnavailable("Portada IA: NVIDIA no respondió a tiempo")
             time.sleep(poll_interval)
             r = http.get(f"{NVCF}/pexec/status/{r.headers['NVCF-REQID']}", headers=headers)
     except httpx.HTTPError as exc:
-        raise NvidiaMediaError(f"Portada IA: error de red: {exc}") from exc
+        raise NvidiaUnavailable(f"Portada IA: error de red: {exc}") from exc
     finally:
         if client is None:
             http.close()
+    if r.status_code >= 500:
+        raise NvidiaUnavailable(f"Portada IA: el modelo de imagen de NVIDIA no está disponible ahora ({r.status_code})")
     if r.status_code != 200:
         raise _status_error("Portada IA", r.status_code, r.text)
     try:

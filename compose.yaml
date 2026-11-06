@@ -152,6 +152,8 @@ services:
       FFMPEG_THREADS: ${FFMPEG_THREADS:-0}
       # Funciones de IA de NVIDIA en el render (mirada, iluminación, voz, portada). Sin clave no se activan.
       NVIDIA_API_KEY: ${NVIDIA_API_KEY:-}
+      # flux2-klein (Apache 2.0) | flux1-dev (más realista, licencia de modelo no comercial)
+      NVIDIA_IMAGE_MODEL: ${NVIDIA_IMAGE_MODEL:-flux2-klein}
     volumes:
       - render-work:/data/work
 

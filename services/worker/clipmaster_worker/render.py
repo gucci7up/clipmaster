@@ -280,7 +280,7 @@ def _hook_voice(ctx: JobContext, job: RenderJobData, hook: str | None, status: d
 
 
 def _cover(ctx: JobContext, job: RenderJobData, status: dict[str, dict]) -> str | None:
-    """Portada generada con FLUX.2 klein a partir del prompt del usuario. None si no se pidió o falló."""
+    """Portada generada con FLUX a partir del prompt del usuario. None si no se pidió o falló."""
     if not (job.ai and job.ai.coverPrompt):
         return None
     ctx.progress("render", 0.97, "Generando portada (NVIDIA)", force=True)

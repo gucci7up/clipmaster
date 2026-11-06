@@ -106,7 +106,7 @@ Ten en cuenta:
 
 ### 5c. Funciones de IA de NVIDIA en el render (opcional)
 
-`compose.yaml` pasa la misma `NVIDIA_API_KEY` al render-worker. Con la clave puesta, redespliega el render-worker: *Ajustes* habilitará «Funciones de IA de NVIDIA» (mirada a cámara, iluminación, voz del gancho y portada) y «Análisis visual con IA» (requiere `LLM_PROVIDER=nvidia`). Usa una clave global de build.nvidia.com, no una de un solo modelo. Cada render con efectos consume créditos y tarda más (unos 20 s de Relighting por cada 17 s de video a 1080p).
+`compose.yaml` pasa la misma `NVIDIA_API_KEY` al render-worker. Con la clave puesta, redespliega el render-worker: *Ajustes* habilitará «Funciones de IA de NVIDIA» (mirada a cámara, iluminación, voz del gancho y portada) y «Análisis visual con IA» (requiere `LLM_PROVIDER=nvidia`). Usa una clave global de build.nvidia.com, no una de un solo modelo. Para portadas y miniaturas más realistas, pon `NVIDIA_IMAGE_MODEL=flux1-dev` (la licencia de FLUX.1-dev es no comercial para el modelo; revisa AI_PIPELINE.md). Cada render con efectos consume créditos y tarda más (unos 20 s de Relighting por cada 17 s de video a 1080p).
 
 ## 6. Modelos de Whisper
 

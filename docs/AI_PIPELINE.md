@@ -112,18 +112,19 @@ Las aplica el render-worker sólo si el administrador configuró `NVIDIA_API_KEY
 | Mirada a cámara | Maxine Eye Contact (gRPC, `grpc.nvcf.nvidia.com`) | el tramo del clip (H.264, ≤1080p) |
 | Iluminación (5 presets) | Maxine Relighting (gRPC) | el tramo del clip |
 | Voz del título gancho | Magpie TTS multilingüe, voces es-US | el texto del gancho |
-| Portada | FLUX.2 klein 4B (Apache 2.0) | la descripción escrita por el usuario |
+| Portada y fondo de miniatura | FLUX.2 klein 4B (Apache 2.0, predeterminado) o FLUX.1-dev con `NVIDIA_IMAGE_MODEL=flux1-dev` | la descripción escrita por el usuario |
 
 - Los efectos de video se aplican antes de recortar y subtitular; entre uno y otro se normaliza a fotogramas constantes porque Relighting rechaza video de fotogramas variables. Desfase medido de audio y video: 0–1 fotograma.
 - La voz se mezcla sobre el audio original (bajado al 30 % mientras habla).
 - Si una función falla (sin créditos, límite, error del servicio), el clip se entrega sin ella y `ClipRender.aiStatus` guarda el motivo, que el editor muestra.
+- **Modelo de imagen:** `NVIDIA_IMAGE_MODEL` en el render-worker. `flux2-klein` (predeterminado) tiene licencia Apache 2.0. `flux1-dev` es más fiel (en la prueba dibujó fichas de dominó reales donde klein dibujó dados), pero la licencia FLUX.1 [dev] sólo permite usar el modelo sin fines comerciales; las imágenes generadas sí pueden usarse comercialmente. Si se cobra por el servicio hace falta una licencia comercial de Black Forest Labs. La función gratuita de FLUX.1-dev es intermitente (el 2026-11-06 respondió en 6 s y horas después devolvía 504): si no responde, el worker lo registra en el log y genera la imagen con FLUX.2 klein, así que la miniatura o portada no falla, pero tarda unos 20 s más. FLUX.1 Kontext (editar el fotograma) no se integra: NVIDIA devuelve «Inference error» con cualquier imagen enviada.
 - **No integrado:** detección de hablante activo (necesita diarización y el Parakeet alojado no la devuelve), Chatterbox (redundante con Magpie), FLUX.1 schnell (no responde), Stable Diffusion 3.5 (sólo descargable y no comercial), Cosmos y Wan (no disponibles con esta clave). Generar video con IA no está disponible.
 
 ### Miniaturas (`services/worker/clipmaster_worker/thumbs.py`)
 
 Desde el editor del clip se genera una miniatura con texto grande, en un job `thumbnail` de la cola de render:
 - **Fondo de fotograma:** el usuario elige el instante en el clip; se toma del video original (sin subtítulos), se recorta al formato de salida centrando el rostro o el movimiento de ese instante (o el encuadre manual del clip) y se le sube un poco el contraste y la saturación.
-- **Fondo con IA:** FLUX.2 klein de NVIDIA a partir de una descripción (requiere «Funciones de IA de NVIDIA»). Unos 4 s. Como todos los modelos de imagen, puede dibujar mal detalles finos como los puntos de las fichas o letras.
+- **Fondo con IA:** FLUX de NVIDIA a partir de una descripción (requiere «Funciones de IA de NVIDIA»). Con FLUX.2 klein, unos 4–30 s; con FLUX.1-dev, unos 6 s y resultados más realistas. Como todos los modelos de imagen, puede dibujar mal detalles finos como los puntos de las fichas o letras.
 - **Texto:** se compone con libass, con las mismas fuentes que los subtítulos (incluidas las propias). Borde grueso o caja de color, arriba, centro o abajo, en tres tamaños.
 - **Tamaños:** 1080×1920 (TikTok, Reels, Shorts), 1280×720 (YouTube) y 1080×1080.
 - Cada miniatura nueva reemplaza a la anterior, que queda marcada para limpieza.

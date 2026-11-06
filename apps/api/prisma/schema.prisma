@@ -360,7 +360,7 @@ model Clip {
   aiRelight     Int?
   /// Voz Magpie para leer el título gancho, o null.
   hookVoice     String?
-  /// Prompt de la portada generada con FLUX.2 klein, o null.
+  /// Prompt de la portada generada con FLUX (NVIDIA), o null.
   coverPrompt   String?
   /// Texto para publicar generado con el LLM: { title, description, hashtags, model, generatedAt }.
   socialCopy    Json?
