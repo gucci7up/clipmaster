@@ -184,13 +184,18 @@ _FENCE = re.compile(r"^```(?:json)?\s*|\s*```$", re.I)
 _THINK = re.compile(r"<think>.*?</think>", re.S | re.I)
 
 
-def parse_verdict(content: str) -> LLMVerdict:
-    """Extrae y valida el objeto JSON de la respuesta (tolera bloques ```json y razonamiento <think>)."""
+def strip_json(content: str) -> str:
+    """Objeto JSON de una respuesta de LLM (tolera bloques ```json y razonamiento <think>)."""
     body = _FENCE.sub("", _THINK.sub("", content).strip())
     start, end = body.find("{"), body.rfind("}")
     if start < 0 or end <= start:
         raise json.JSONDecodeError("sin objeto JSON", body, 0)
-    return LLMVerdict.model_validate(json.loads(body[start:end + 1]))
+    return body[start:end + 1]
+
+
+def parse_verdict(content: str) -> LLMVerdict:
+    """Extrae y valida el objeto JSON de la respuesta."""
+    return LLMVerdict.model_validate(json.loads(strip_json(content)))
 
 
 def _judge_ollama(settings: Settings, text: str, mode: str) -> str:

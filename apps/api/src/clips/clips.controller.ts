@@ -117,6 +117,12 @@ export class ClipsController {
   }
 
   @HttpCode(200)
+  @HttpCode(200)
+  @Post('clips/:id/copy')
+  generateCopy(@CurrentUser() user: AuthUser, @Param('id', ParseUUIDPipe) id: string) {
+    return this.clips.generateCopy(user.id, id);
+  }
+
   @Post('clips/:id/regenerate')
   regenerate(@CurrentUser() user: AuthUser, @Param('id', ParseUUIDPipe) id: string) {
     return this.clips.regenerate(user.id, id);

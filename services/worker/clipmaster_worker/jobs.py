@@ -29,6 +29,7 @@ from .contracts import (
     QUEUE_PREFIX,
     QUEUE_RENDER,
     AnalyzeJobData,
+    CopyJobData,
     ImportJobData,
     LiveCaptureJobData,
     RenderJobData,
@@ -121,6 +122,10 @@ class JobRunner:
                 notify_segment=lambda body: self.api.segment(job.captureSessionId, body),
                 should_stop=lambda: bool(self.redis.exists(stop_capture_key(job.captureSessionId))),
             )
+        if isinstance(job, CopyJobData):
+            from .social import run_copy
+
+            return run_copy(ctx, job)
         raise ValueError("Job no soportado")
 
     def heartbeat(self, role: str, device: str) -> None:

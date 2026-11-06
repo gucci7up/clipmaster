@@ -15,6 +15,10 @@ os.environ.setdefault("WHISPER_MODEL", os.environ.get("TEST_WHISPER_MODEL", "tin
 os.environ.setdefault("WHISPER_MODELS_DIR", str(ARTIFACTS / "models"))
 os.environ.setdefault("LOCAL_STORAGE_DIR", str(ARTIFACTS / "storage"))
 os.environ.setdefault("RENDER_ENCODER", "libx264")
+# Las pruebas no deben llamar a NVIDIA por tener la clave en el entorno del desarrollador; las de la API real
+# (test_nvidia_live.py) la leen aparte cuando NVIDIA_LIVE_TESTS=1.
+if os.environ.get("NVIDIA_LIVE_TESTS") != "1":
+    os.environ.pop("NVIDIA_API_KEY", None)
 
 
 @pytest.fixture(scope="session")

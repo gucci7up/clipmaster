@@ -5,7 +5,7 @@
  *
  *   TEST_DATABASE_URL=postgresql://... pnpm --filter @clipmaster/api test
  */
-import type { AnalyzeResult, AnyJobData, ImportResult, RenderJobData } from '@clipmaster/shared';
+import type { AnalyzeResult, AnyJobData, CopyJobData, ImportResult, RenderJobData } from '@clipmaster/shared';
 import { ClipsService } from '../src/clips/clips.service';
 import type { AuditService } from '../src/common/audit.service';
 import type { PrismaService } from '../src/common/prisma.service';
@@ -191,6 +191,37 @@ run('editor de clips (PostgreSQL real)', () => {
     const clip = await clips.createManual(userId, project.id, { start: 7, end: 37, title: 'Saludo' });
     expect(clip).toMatchObject({ title: 'Saludo', start: 7, end: 37, hookEnabled: true, reason: 'Creado a mano' });
     expect(queues.renders().at(-1)!.clipId).toBe(clip.id);
+  });
+
+  it('el texto para publicar sólo se pide con permiso del LLM, y su resultado o error queda en el clip', async () => {
+    const { project, rows } = await analysedProject();
+    await prisma.project.update({ where: { id: project.id }, data: { status: 'COMPLETED' } });
+    await expect(clips.generateCopy(userId, rows[0].id)).rejects.toThrow('LLM semántico');
+    expect(queues.enqueued).toHaveLength(0);
+
+    await prisma.aISettings.upsert({ where: { userId }, create: { userId, semanticLLM: true }, update: { semanticLLM: true } });
+    const pending = await clips.generateCopy(userId, rows[0].id);
+    expect(pending.socialStatus).toBe('PENDING');
+    const job = queues.enqueued.at(-1)!.data as CopyJobData;
+    expect(queues.enqueued.at(-1)!.queue).toBe('ai');
+    expect(job).toMatchObject({ kind: 'copy', clipId: rows[0].id, text: 'klk mi gente', title: 'Saludo' });
+    await expect(clips.generateCopy(userId, rows[0].id)).rejects.toThrow('Ya se está generando');
+
+    await pipeline.onStart(job.jobId);
+    await pipeline.onComplete(job.jobId, { title: 'Klk', description: 'Saludo a la gente 👋', hashtags: ['#domino'], model: 'nvidia:x' });
+    const done = await clips.detail(userId, rows[0].id);
+    expect(done.socialStatus).toBe('READY');
+    expect(done.socialCopy).toMatchObject({ title: 'Klk', hashtags: ['#domino'] });
+
+    await clips.generateCopy(userId, rows[0].id);
+    const failed = queues.enqueued.at(-1)!.data as CopyJobData;
+    await pipeline.onStart(failed.jobId);
+    await pipeline.onFail(failed.jobId, 'El LLM no está disponible', false, 1);
+    const after = await clips.detail(userId, rows[0].id);
+    expect(after).toMatchObject({ socialStatus: 'FAILED', socialError: 'El LLM no está disponible' });
+    expect(after.socialCopy).toMatchObject({ title: 'Klk' }); // se conserva el texto anterior
+    expect((await prisma.project.findUniqueOrThrow({ where: { id: project.id } })).status).toBe('COMPLETED');
+    await prisma.aISettings.update({ where: { userId }, data: { semanticLLM: false } });
   });
 
   it('combinar clips crea uno nuevo con los tramos en orden y no toca los originales', async () => {

@@ -174,7 +174,31 @@ export interface RenderJobData {
   outputPrefix: string;
 }
 
-export type AnyJobData = ImportJobData | LiveCaptureJobData | AnalyzeJobData | RenderJobData;
+/** Título, descripción y hashtags para publicar un clip, generados con el LLM del ai-worker. */
+export interface CopyJobData {
+  kind: 'copy';
+  jobId: string;
+  projectId: string;
+  userId: string;
+  clipId: string;
+  /** Texto del clip (con las correcciones del usuario), recortado a 6.000 caracteres. */
+  text: string;
+  title: string;
+  mode: ContentMode;
+  language?: string | null;
+}
+
+export interface SocialCopy {
+  title: string;
+  description: string;
+  hashtags: string[];
+}
+
+export interface CopyResult extends SocialCopy {
+  model: string;
+}
+
+export type AnyJobData = ImportJobData | LiveCaptureJobData | AnalyzeJobData | RenderJobData | CopyJobData;
 
 // ---------- Resultados ----------
 

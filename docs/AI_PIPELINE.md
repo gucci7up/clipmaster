@@ -119,6 +119,14 @@ Las aplica el render-worker sólo si el administrador configuró `NVIDIA_API_KEY
 - Si una función falla (sin créditos, límite, error del servicio), el clip se entrega sin ella y `ClipRender.aiStatus` guarda el motivo, que el editor muestra.
 - **No integrado:** detección de hablante activo (necesita diarización y el Parakeet alojado no la devuelve), Chatterbox (redundante con Magpie), FLUX.1 schnell (no responde), Stable Diffusion 3.5 (sólo descargable y no comercial), Cosmos y Wan (no disponibles con esta clave). Generar video con IA no está disponible.
 
+### Texto para publicar (`services/worker/clipmaster_worker/social.py`)
+
+Desde el editor del clip, «Generar con IA» crea un job `copy` en la cola de IA. El ai-worker pide al LLM configurado (Ollama o NVIDIA) un título, una descripción y de 4 a 8 hashtags a partir del texto del clip, con las correcciones del usuario.
+- Requiere «LLM semántico» activado en *Ajustes*, porque el texto del clip sale hacia el proveedor.
+- La respuesta se valida (longitudes, hashtags sin espacios ni duplicados); si no es válida se reintenta una vez y, si vuelve a fallar, se informa del error sin inventar texto.
+- Comparte la cola con los análisis (concurrencia 1): si hay un video analizándose, espera su turno.
+- Probado con Nemotron de NVIDIA: unos 3 s por clip.
+
 ### Encontrar momentos (`apps/api/src/clips/moments.ts`)
 
 Buscador del proyecto sobre la transcripción guardada. No usa IA ni envía nada fuera del servidor.

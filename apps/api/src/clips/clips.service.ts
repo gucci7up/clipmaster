@@ -1,5 +1,5 @@
 import { BadRequestException, ConflictException, Injectable, NotFoundException } from '@nestjs/common';
-import { AspectRatio, ClipStatus, Prisma } from '@prisma/client';
+import { AspectRatio, ClipStatus, JobStatus, JobType, Prisma } from '@prisma/client';
 import { BUILTIN_FONTS, DEFAULT_SUBTITLE_STYLE, HOOK_VOICES, RELIGHT_PRESETS, SUBTITLE_PRESETS, SubtitleStyle, Word } from '@clipmaster/shared';
 import { AuditService } from '../common/audit.service';
 import { searchMoments } from './moments';
@@ -234,6 +234,31 @@ export class ClipsService {
     await this.pipeline.enqueueRender(created.id);
     await this.audit.log(userId, 'clip.merge', created.id, null, { clipIds: unique });
     return this.detail(userId, created.id);
+  }
+
+  /**
+   * Título, descripción y hashtags para publicar el clip, con el LLM del ai-worker. Usa el mismo permiso que
+   * el LLM semántico, porque el texto del clip sale hacia el proveedor (Ollama local o NVIDIA).
+   */
+  async generateCopy(userId: string, id: string) {
+    const clip = await this.owned(userId, id);
+    const ai = await this.prisma.aISettings.findUnique({ where: { userId } });
+    if (!ai?.semanticLLM) throw new BadRequestException('Activa «LLM semántico» en Ajustes para generar el texto con IA');
+    const running = await this.prisma.processingJob.findFirst({
+      where: { dedupeKey: { startsWith: `copy:${id}:` }, status: { in: [JobStatus.QUEUED, JobStatus.RUNNING] } },
+    });
+    if (running) throw new ConflictException('Ya se está generando el texto de este clip');
+    const { words } = await this.words(userId, id);
+    const text = words.map((w) => w.word.trim()).filter(Boolean).join(' ').slice(0, 6000);
+    if (!text) throw new BadRequestException('El clip no tiene texto transcrito');
+    const project = await this.prisma.project.findUniqueOrThrow({ where: { id: clip.projectId } });
+    await this.prisma.clip.update({ where: { id }, data: { socialStatus: 'PENDING', socialError: null } });
+    await this.pipeline.createJob(project, JobType.COPY, `copy:${id}:${Date.now()}`, (jobId) => ({
+      kind: 'copy', jobId, projectId: project.id, userId, clipId: id, text, title: clip.title, mode: project.mode,
+      language: project.detectedLanguage ?? project.language ?? null,
+    }));
+    await this.audit.log(userId, 'clip.copy_requested', id);
+    return this.detail(userId, id);
   }
 
   /** «Encontrar momentos»: busca en la transcripción del proyecto (sin IA externa). */

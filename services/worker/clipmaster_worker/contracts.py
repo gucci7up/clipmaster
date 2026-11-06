@@ -196,13 +196,26 @@ class RenderJobData(_Model):
     outputPrefix: str
 
 
-JobData = Union[ImportJobData, LiveCaptureJobData, AnalyzeJobData, RenderJobData]
+class CopyJobData(_Model):
+    kind: Literal["copy"]
+    jobId: str
+    projectId: str
+    userId: str
+    clipId: str
+    text: str = Field(max_length=6000)
+    title: str = Field(max_length=200)
+    mode: ContentMode = "AUTO"
+    language: Optional[str] = None
+
+
+JobData = Union[ImportJobData, LiveCaptureJobData, AnalyzeJobData, RenderJobData, CopyJobData]
 
 _BY_KIND = {
     "import": ImportJobData,
     "live": LiveCaptureJobData,
     "analyze": AnalyzeJobData,
     "render": RenderJobData,
+    "copy": CopyJobData,
 }
 
 

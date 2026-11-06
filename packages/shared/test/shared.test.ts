@@ -39,6 +39,6 @@ describe('resolveWeights', () => {
 
 describe('fixtures de contrato', () => {
   it('contienen los cuatro tipos de job', () => {
-    expect(fixtures.map((f: { kind: string }) => f.kind).sort()).toEqual(['analyze', 'import', 'live', 'render']);
+    expect(fixtures.map((f: { kind: string }) => f.kind).sort()).toEqual(['analyze', 'copy', 'import', 'live', 'render']);
   });
 });

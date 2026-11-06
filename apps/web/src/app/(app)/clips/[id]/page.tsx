@@ -10,6 +10,7 @@ import useSWR from 'swr';
 import { toast } from 'sonner';
 import { ErrorState, ScoreBadge } from '@/components/common';
 import { ScoreBreakdown, StyleLibrary, WordsEditor } from '@/components/clip-tools';
+import { SocialCopyCard } from '@/components/social-copy';
 import { SubtitleControls } from '@/components/subtitle-controls';
 import { Badge, Button, Card, CardContent, CardHeader, CardTitle, ConfirmButton, Input, Label, Select, Skeleton, Switch } from '@/components/ui';
 import { api, ApiError, Clip, ProjectDetail } from '@/lib/api';
@@ -52,10 +53,10 @@ export default function ClipEditorPage() {
   const { id } = useParams<{ id: string }>();
   const router = useRouter();
   const { data: clip, error, mutate } = useSWR<Clip>(`/clips/${id}`, {
-    refreshInterval: (c) => (c && (c.status === 'PENDING' || c.status === 'RENDERING') ? 4000 : 0),
+    refreshInterval: (c) => (c && (c.status === 'PENDING' || c.status === 'RENDERING' || c.socialStatus === 'PENDING') ? 4000 : 0),
   });
   const { data: project } = useSWR<ProjectDetail>(clip ? `/projects/${clip.projectId}` : null);
-  const { data: settings } = useSWR<{ ai: { aiMedia: boolean }; aiMediaAvailable: boolean }>('/settings');
+  const { data: settings } = useSWR<{ ai: { aiMedia: boolean; semanticLLM: boolean }; aiMediaAvailable: boolean; llmProvider: string | null }>('/settings');
   const [d, setD] = useState<Draft | null>(null);
   const [saving, setSaving] = useState(false);
   const sourceRef = useRef<HTMLVideoElement>(null);
@@ -246,6 +247,7 @@ export default function ClipEditorPage() {
               </div>
             </CardContent>
           </Card>
+          <SocialCopyCard clip={clip} llmEnabled={!!settings?.ai.semanticLLM} llmProvider={settings?.llmProvider ?? null} onChange={(c) => void mutate(c, { revalidate: false })} />
           <AiEffects clip={clip} d={d} set={set} enabled={!!settings?.ai.aiMedia} available={!!settings?.aiMediaAvailable} />
           <div className="grid grid-cols-2 gap-2">
             <Button variant="outline" disabled={!dirty || !!invalid || saving} onClick={() => save(false)}><Save /> Guardar</Button>

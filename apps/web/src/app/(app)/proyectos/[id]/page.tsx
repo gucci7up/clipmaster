@@ -15,7 +15,7 @@ import { api, ApiError, Clip, Job, ProjectDetail } from '@/lib/api';
 import { formatBytes, formatDate, formatDuration, formatMs, formatTimecode } from '@/lib/utils';
 
 const JOB_LABEL: Record<Job['type'], string> = {
-  IMPORT: 'Importación', LIVE_CAPTURE: 'Captura en vivo', ANALYZE: 'Análisis', RENDER: 'Render', CLEANUP: 'Limpieza',
+  IMPORT: 'Importación', LIVE_CAPTURE: 'Captura en vivo', ANALYZE: 'Análisis', RENDER: 'Render', CLEANUP: 'Limpieza', COPY: 'Texto para publicar',
 };
 const STAGE_LABEL: Record<string, string> = {
   validate: 'Validando', download: 'Descargando', import: 'Importando', audio: 'Extrayendo audio',
@@ -76,7 +76,7 @@ export default function ProjectDetailPage() {
   const capture = p.captures[0];
   const asset = p.assets[0];
   const jobs = [...p.jobs].sort((a, b) => +new Date(b.queuedAt) - +new Date(a.queuedAt));
-  const visibleJobs = jobs.filter((j) => j.type !== 'RENDER' || j.status !== 'COMPLETED').slice(0, 8);
+  const visibleJobs = jobs.filter((j) => j.type !== 'COPY' && (j.type !== 'RENDER' || j.status !== 'COMPLETED')).slice(0, 8);
 
   return (
     <>

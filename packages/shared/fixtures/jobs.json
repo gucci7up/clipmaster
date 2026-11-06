@@ -59,5 +59,16 @@
     "reframe": { "mode": "auto" },
     "track": [{ "t": 0, "x": 0.5, "y": 0.4 }],
     "outputPrefix": "clips/a3c1/0b9a"
+  },
+  {
+    "kind": "copy",
+    "jobId": "7f1c2d1e-1b9a-4c3e-9a51-6b1d0c9e2a11",
+    "projectId": "a3c1",
+    "userId": "u1",
+    "clipId": "0b9a",
+    "text": "Capicúa, no lo puedo creer",
+    "title": "La capicúa del año",
+    "mode": "DOMINO",
+    "language": "es"
   }
 ]

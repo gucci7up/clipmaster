@@ -74,6 +74,7 @@ Se aplica en la validación, antes de descargar y **en cada redirección**:
   - *Ajustes* muestra al usuario si el proveedor es NVIDIA antes de que lo active;
   - la clave solo vive en el entorno del ai-worker, y nunca llega a la API, al navegador ni a los logs;
   - **los términos del endpoint gratuito de NVIDIA indican que entradas y salidas pueden registrarse y usarse para mejorar sus productos**, y piden no enviar información confidencial ni datos personales. No lo actives para contenido de terceros o sensible; para eso usa Ollama local.
+- **Texto para publicar** (título, descripción y hashtags): usa el mismo permiso y proveedor que el LLM semántico y sólo envía el texto del clip.
 - **Funciones de IA de NVIDIA en el render y análisis con fotogramas** (`aiMedia` / `visionLLM`):
   - desactivadas por defecto; hacen falta la clave en el worker y el permiso del usuario en *Ajustes*, que avisa de lo que se envía;
   - se envían a NVIDIA el tramo de video del clip (mirada e iluminación), el texto del gancho (voz), la descripción de la portada y, en el análisis visual, 3 fotogramas por candidato;

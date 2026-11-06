@@ -1,4 +1,4 @@
-import type { AiFeature, AiFeatureStatus, AspectRatio, ContentMode, ProviderId, SubtitleStyle, Word } from '@clipmaster/shared';
+import type { AiFeature, AiFeatureStatus, AspectRatio, ContentMode, ProviderId, SocialCopy, SubtitleStyle, Word } from '@clipmaster/shared';
 
 export class ApiError extends Error {
   constructor(public status: number, message: string, public body?: unknown) {
@@ -80,7 +80,7 @@ export interface VideoSource {
 
 export interface Job {
   id: string;
-  type: 'IMPORT' | 'LIVE_CAPTURE' | 'ANALYZE' | 'RENDER' | 'CLEANUP';
+  type: 'IMPORT' | 'LIVE_CAPTURE' | 'ANALYZE' | 'RENDER' | 'CLEANUP' | 'COPY';
   status: 'QUEUED' | 'RUNNING' | 'COMPLETED' | 'FAILED' | 'CANCELLED';
   stage: string | null;
   progress: number | null;
@@ -168,6 +168,10 @@ export interface Clip {
   coverPrompt: string | null;
   coverUrl: string | null;
   coverDownloadUrl: string | null;
+  /** Título, descripción y hashtags generados con el LLM. */
+  socialCopy: (SocialCopy & { model: string; generatedAt: string }) | null;
+  socialStatus: 'PENDING' | 'READY' | 'FAILED' | null;
+  socialError: string | null;
   /** Clip combinado: tramos de la línea de tiempo del proyecto, en orden. */
   segments: { start: number; end: number }[] | null;
   wordsEdited: boolean;

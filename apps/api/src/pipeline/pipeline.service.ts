@@ -13,6 +13,8 @@ import {
   AnalyzeJobData,
   AnalyzeResult,
   AnyJobData,
+  CopyJobData,
+  CopyResult,
   DEFAULT_SUBTITLE_STYLE,
   ImportResult,
   LiveCaptureResult,
@@ -62,6 +64,7 @@ const TYPE_QUEUE: Record<JobType, QueueName> = {
   ANALYZE: Queues.AI,
   RENDER: Queues.RENDER,
   CLEANUP: Queues.CAPTURE,
+  COPY: Queues.AI,
 };
 
 type JobRow = Prisma.ProcessingJobGetPayload<{ include: { project: true } }>;
@@ -397,6 +400,9 @@ export class PipelineService {
       case JobType.LIVE_CAPTURE:
         await this.completeLive(job, result as LiveCaptureResult);
         break;
+      case JobType.COPY:
+        await this.completeCopy(job, result as CopyResult);
+        break;
       default:
         break;
     }
@@ -404,7 +410,8 @@ export class PipelineService {
       where: { id: job.id },
       data: { status: JobStatus.COMPLETED, finishedAt: new Date(), progress: 1, result: summarize(result) },
     });
-    await this.checkCompletion(job.projectId);
+    // El texto de publicación no forma parte del procesamiento del proyecto.
+    if (job.type !== JobType.COPY) await this.checkCompletion(job.projectId);
     return { ok: true };
   }
 
@@ -431,6 +438,11 @@ export class PipelineService {
     });
     if (willRetry) return;
 
+    if (job.type === JobType.COPY) {
+      const p = job.payload as unknown as CopyJobData;
+      await this.prisma.clip.update({ where: { id: p.clipId }, data: { socialStatus: 'FAILED', socialError: error.slice(0, 500) } }).catch(() => undefined);
+      return;
+    }
     if (job.type === JobType.RENDER) {
       const p = job.payload as unknown as RenderJobData;
       await this.prisma.clipRender.update({ where: { id: p.renderId }, data: { status: ClipStatus.FAILED, error: error.slice(0, 2000), finishedAt: new Date() } }).catch(() => undefined);
@@ -450,6 +462,15 @@ export class PipelineService {
   }
 
   // ---------------------------------------------------------------- resultados
+
+  private async completeCopy(job: JobRow, r: CopyResult) {
+    const p = job.payload as unknown as CopyJobData;
+    const copy = { title: r.title, description: r.description, hashtags: r.hashtags, model: r.model, generatedAt: new Date().toISOString() };
+    await this.prisma.clip.update({
+      where: { id: p.clipId },
+      data: { socialCopy: copy as unknown as Prisma.InputJsonValue, socialStatus: 'READY', socialError: null },
+    });
+  }
 
   private async completeImport(job: JobRow, r: ImportResult) {
     const project = job.project;

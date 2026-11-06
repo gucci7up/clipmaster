@@ -66,6 +66,8 @@ enum JobType {
   ANALYZE
   RENDER
   CLEANUP
+  /// Título, descripción y hashtags de un clip con el LLM.
+  COPY
 }
 
 enum JobStatus {
@@ -358,6 +360,11 @@ model Clip {
   hookVoice     String?
   /// Prompt de la portada generada con FLUX.2 klein, o null.
   coverPrompt   String?
+  /// Texto para publicar generado con el LLM: { title, description, hashtags, model, generatedAt }.
+  socialCopy    Json?
+  /// PENDING | READY | FAILED, o null si nunca se pidió.
+  socialStatus  String?
+  socialError   String?
   status        ClipStatus  @default(PENDING)
   currentRenderId String?   @db.Uuid
   deletedAt     DateTime?
