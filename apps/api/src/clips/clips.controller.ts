@@ -1,4 +1,4 @@
-import { Body, Controller, Delete, Get, HttpCode, Param, ParseUUIDPipe, Patch, Post, Put, Query } from '@nestjs/common';
+import { BadRequestException, Body, Controller, Delete, Get, HttpCode, Param, ParseUUIDPipe, Patch, Post, Put, Query } from '@nestjs/common';
 import { ApiPropertyOptional, ApiTags } from '@nestjs/swagger';
 import { AspectRatio } from '@prisma/client';
 import { Type } from 'class-transformer';
@@ -41,6 +41,12 @@ class MergeClipsDto {
   @IsOptional() @IsString() @MaxLength(200) title?: string;
 }
 
+class CreateClipDto {
+  @Type(() => Number) @IsNumber() @Min(0) start: number;
+  @Type(() => Number) @IsNumber() @Min(0) end: number;
+  @IsOptional() @IsString() @MaxLength(200) title?: string;
+}
+
 class ApplyStyleDto {
   @IsObject() style: Partial<SubtitleStyle>;
   @IsOptional() @IsBoolean() regenerate?: boolean;
@@ -59,6 +65,18 @@ export class ClipsController {
   @Get('projects/:projectId/clips')
   forProject(@CurrentUser() user: AuthUser, @Param('projectId', ParseUUIDPipe) projectId: string) {
     return this.clips.listForProject(user.id, projectId);
+  }
+
+  @Get('projects/:projectId/moments')
+  moments(@CurrentUser() user: AuthUser, @Param('projectId', ParseUUIDPipe) projectId: string, @Query('q') q?: string) {
+    const query = (q ?? '').trim();
+    if (query.length < 2 || query.length > 200) throw new BadRequestException('Escribe entre 2 y 200 caracteres');
+    return this.clips.moments(user.id, projectId, query);
+  }
+
+  @Post('projects/:projectId/clips')
+  create(@CurrentUser() user: AuthUser, @Param('projectId', ParseUUIDPipe) projectId: string, @Body() dto: CreateClipDto) {
+    return this.clips.createManual(user.id, projectId, dto);
   }
 
   @HttpCode(200)

@@ -4,10 +4,11 @@ import { MODES } from '@clipmaster/shared';
 import { ArrowLeft, Ban, Film, ListTree, RefreshCw, ScrollText, Square, Trash2 } from 'lucide-react';
 import Link from 'next/link';
 import { useParams, useRouter } from 'next/navigation';
-import { useState } from 'react';
+import { useRef, useState } from 'react';
 import useSWR from 'swr';
 import { toast } from 'sonner';
 import { MergeClipsDialog } from '@/components/clip-tools';
+import { FindMoments } from '@/components/find-moments';
 import { ClipCard, EmptyState, ErrorState, STATUS, StatusBadge } from '@/components/common';
 import { Badge, Button, Card, CardContent, CardHeader, CardTitle, ConfirmButton, Progress, Skeleton, Tabs } from '@/components/ui';
 import { api, ApiError, Clip, Job, ProjectDetail } from '@/lib/api';
@@ -52,6 +53,7 @@ export default function ProjectDetailPage() {
   const { id } = useParams<{ id: string }>();
   const router = useRouter();
   const [tab, setTab] = useState<'clips' | 'transcript' | 'events'>('clips');
+  const videoRef = useRef<HTMLVideoElement>(null);
   const { data: p, error, mutate } = useSWR<ProjectDetail>(`/projects/${id}`);
   const { data: clips } = useSWR<Clip[]>(`/projects/${id}/clips`);
   const { data: events } = useSWR<EventRow[]>(tab === 'events' ? `/projects/${id}/events` : null);
@@ -110,9 +112,16 @@ export default function ProjectDetailPage() {
         <div className="min-w-0 space-y-6">
           {p.originalUrl && (
             <Card className="overflow-hidden">
-              <video src={p.originalUrl} controls preload="metadata" className="aspect-video w-full bg-black" />
+              <video ref={videoRef} src={p.originalUrl} controls preload="metadata" className="aspect-video w-full bg-black" />
             </Card>
           )}
+          <FindMoments projectId={p.id} sourceDuration={asset?.durationSec ?? null} onSeek={p.originalUrl ? (t) => {
+            const v = videoRef.current;
+            if (!v) return;
+            v.currentTime = t;
+            v.scrollIntoView({ behavior: 'smooth', block: 'center' });
+            void v.play().catch(() => undefined);
+          } : undefined} />
           <Tabs value={tab} onChange={setTab} items={[
             { value: 'clips', label: <span className="flex items-center gap-1.5"><Film className="size-4" /> Clips ({clips?.length ?? 0})</span> },
             { value: 'transcript', label: <span className="flex items-center gap-1.5"><ScrollText className="size-4" /> Transcripción</span> },

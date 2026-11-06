@@ -119,6 +119,15 @@ Las aplica el render-worker sólo si el administrador configuró `NVIDIA_API_KEY
 - Si una función falla (sin créditos, límite, error del servicio), el clip se entrega sin ella y `ClipRender.aiStatus` guarda el motivo, que el editor muestra.
 - **No integrado:** detección de hablante activo (necesita diarización y el Parakeet alojado no la devuelve), Chatterbox (redundante con Magpie), FLUX.1 schnell (no responde), Stable Diffusion 3.5 (sólo descargable y no comercial), Cosmos y Wan (no disponibles con esta clave). Generar video con IA no está disponible.
 
+### Encontrar momentos (`apps/api/src/clips/moments.ts`)
+
+Buscador del proyecto sobre la transcripción guardada. No usa IA ni envía nada fuera del servidor.
+- Ignora mayúsculas, tildes y puntuación, y acepta variaciones por raíz (`jugada` encuentra `jugando`).
+- Con varias palabras descarta las vacías («el», «de»…) y exige al menos el 60 % de los términos; la frase exacta puntúa más.
+- Mira cada segmento junto al siguiente, porque una frase puede quedar partida, y usa los tiempos por palabra para dar el instante exacto.
+- Desde un resultado se crea un clip (`POST /projects/:id/clips`) con el estilo por defecto del usuario, empezando 3 s antes.
+- Limitación: sólo encuentra lo que se dice. Buscar por lo que se ve («gol», «persona riendo») necesitaría un modelo de visión sobre todo el video.
+
 ### Modo Dominó
 
 Usa el léxico `domino` en `lexicon.py`: capicúa, tranque, pollona, chuchazo, doble seis, «se trancó», «pasé», etc. También tiene pesos con más emoción y audio, y desactiva el análisis visual.

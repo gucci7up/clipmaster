@@ -2,6 +2,7 @@ import { BadRequestException, ConflictException, Injectable, NotFoundException }
 import { AspectRatio, ClipStatus, Prisma } from '@prisma/client';
 import { BUILTIN_FONTS, DEFAULT_SUBTITLE_STYLE, HOOK_VOICES, RELIGHT_PRESETS, SUBTITLE_PRESETS, SubtitleStyle, Word } from '@clipmaster/shared';
 import { AuditService } from '../common/audit.service';
+import { searchMoments } from './moments';
 import { PrismaService } from '../common/prisma.service';
 import { toJSONSafe } from '../common/json';
 import { MediaService } from '../media/media.service';
@@ -233,6 +234,44 @@ export class ClipsService {
     await this.pipeline.enqueueRender(created.id);
     await this.audit.log(userId, 'clip.merge', created.id, null, { clipIds: unique });
     return this.detail(userId, created.id);
+  }
+
+  /** «Encontrar momentos»: busca en la transcripción del proyecto (sin IA externa). */
+  async moments(userId: string, projectId: string, query: string) {
+    await this.ownedProject(userId, projectId);
+    const segments = await this.prisma.transcriptSegment.findMany({
+      where: { projectId }, orderBy: { start: 'asc' }, select: { start: true, end: true, text: true, words: true },
+    });
+    return { query, total: segments.length, moments: searchMoments(segments, query) };
+  }
+
+  /** Clip creado a mano (p. ej. desde un momento encontrado), con el estilo por defecto del usuario. */
+  async createManual(userId: string, projectId: string, input: { start: number; end: number; title?: string }) {
+    const project = await this.ownedProject(userId, projectId);
+    const start = Math.max(0, Math.round(input.start * 10) / 10);
+    const end = Math.round(input.end * 10) / 10;
+    if (end - start < 3) throw new BadRequestException('El clip debe durar al menos 3 s');
+    if (end - start > 600) throw new BadRequestException('Máximo 10 minutos');
+    const sources = await this.pipeline.sourcesFor(projectId, start, end);
+    const covered = Math.max(0, ...sources.map((x) => x.offsetSec + x.durationSec));
+    if (!sources.length || end > covered + 0.5) throw new BadRequestException('Ese tramo está fuera del video fuente');
+    const { style, hookTitles } = await this.pipeline.clipDefaults(userId);
+    const created = await this.prisma.clip.create({
+      data: {
+        projectId, title: (input.title?.trim() || 'Momento encontrado').slice(0, 200), reason: 'Creado a mano', score: 0,
+        start, end, aspect: project.aspect, subtitles: project.subtitles,
+        subtitleStyle: style as unknown as Prisma.InputJsonValue, hookEnabled: hookTitles,
+      },
+    });
+    await this.pipeline.enqueueRender(created.id);
+    await this.audit.log(userId, 'clip.create', created.id, null, { start, end });
+    return this.detail(userId, created.id);
+  }
+
+  private async ownedProject(userId: string, projectId: string) {
+    const project = await this.prisma.project.findFirst({ where: { id: projectId, userId, deletedAt: null } });
+    if (!project) throw new NotFoundException('Proyecto no encontrado');
+    return project;
   }
 
   /** Aplica un estilo de subtítulos a todos los clips del proyecto y, si se pide, los vuelve a renderizar. */

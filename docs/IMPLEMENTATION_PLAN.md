@@ -54,6 +54,7 @@ Leyenda:
 | Plantillas neon / minimal / podcast y fuentes propias TTF/OTF | ✅ unitarias + e2e de render con fuente subida |
 | Desglose de la puntuación (componentes reales del análisis) | ✅ |
 | Combinar clips en uno nuevo | ✅ integración + e2e de render (dos tramos concatenados) |
+| Encontrar momentos: buscar en la transcripción y crear un clip desde el resultado | ✅ unitarias + integración; búsqueda por texto, no por significado ni por imagen |
 
 ## Etapa 4: Directos
 

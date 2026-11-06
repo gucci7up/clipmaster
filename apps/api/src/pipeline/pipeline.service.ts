@@ -685,6 +685,12 @@ export class PipelineService {
 
   // ---------------------------------------------------------------- utilidades
 
+  /** Estilo y título gancho que el usuario tiene por defecto para clips nuevos. */
+  async clipDefaults(userId: string): Promise<{ style: SubtitleStyle; hookTitles: boolean }> {
+    const hookTitles = (await this.prisma.userSettings.findUnique({ where: { userId } }))?.hookTitles ?? true;
+    return { style: await this.userSubtitleStyle(userId), hookTitles };
+  }
+
   private async userSubtitleStyle(userId: string): Promise<SubtitleStyle> {
     const s = await this.prisma.userSettings.findUnique({ where: { userId } });
     return { ...DEFAULT_SUBTITLE_STYLE, ...((s?.subtitleStyle as Partial<SubtitleStyle> | null) ?? {}) };

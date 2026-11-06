@@ -34,6 +34,7 @@ run('editor de clips (PostgreSQL real)', () => {
   let pipeline: PipelineService;
   let clips: ClipsService;
   let userId: string;
+  let otherUser: string;
 
   beforeAll(async () => {
     process.env.DATABASE_URL = DB;
@@ -45,6 +46,7 @@ run('editor de clips (PostgreSQL real)', () => {
     prisma = new PS();
     await prisma.$connect();
     userId = (await prisma.user.create({ data: { email: `editor-${Date.now()}@example.com`, name: 'Editor', passwordHash: 'x' } })).id;
+    otherUser = (await prisma.user.create({ data: { email: `otro-${Date.now()}@example.com`, name: 'Otro', passwordHash: 'x' } })).id;
   });
 
   beforeEach(() => {
@@ -57,6 +59,7 @@ run('editor de clips (PostgreSQL real)', () => {
 
   afterAll(async () => {
     if (userId) await prisma.user.delete({ where: { id: userId } });
+    if (otherUser) await prisma.user.delete({ where: { id: otherUser } });
     await prisma.$disconnect();
   });
 
@@ -173,6 +176,21 @@ run('editor de clips (PostgreSQL real)', () => {
     expect(saved.coverKey).toBe('covers/x/r.jpg');
     expect(saved.aiStatus).toMatchObject({ relight: { status: 'failed', error: 'sin créditos' } });
     await prisma.aISettings.update({ where: { userId }, data: { aiMedia: false } });
+  });
+
+  it('encontrar momentos busca en la transcripción y crea un clip desde el resultado', async () => {
+    const { project } = await analysedProject();
+    const r = await clips.moments(userId, project.id, 'KLK');
+    expect(r.moments.map((m) => m.at)).toEqual([10]);
+    await expect(clips.moments(otherUser, project.id, 'klk')).rejects.toThrow('no encontrado');
+
+    await expect(clips.createManual(userId, project.id, { start: 10, end: 11 })).rejects.toThrow('3 s');
+    await expect(clips.createManual(userId, project.id, { start: 900, end: 930 })).rejects.toThrow('fuente');
+    expect(await prisma.clip.count({ where: { projectId: project.id, start: 900 } })).toBe(0);
+
+    const clip = await clips.createManual(userId, project.id, { start: 7, end: 37, title: 'Saludo' });
+    expect(clip).toMatchObject({ title: 'Saludo', start: 7, end: 37, hookEnabled: true, reason: 'Creado a mano' });
+    expect(queues.renders().at(-1)!.clipId).toBe(clip.id);
   });
 
   it('combinar clips crea uno nuevo con los tramos en orden y no toca los originales', async () => {
