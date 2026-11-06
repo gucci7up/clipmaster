@@ -263,6 +263,27 @@ run('editor de clips (PostgreSQL real)', () => {
     expect((await prisma.project.findUniqueOrThrow({ where: { id: project.id } })).status).toBe('COMPLETED');
   });
 
+  it('la portada con la persona recortada y fondo IA sin descripción usa los datos del clip', async () => {
+    const { project, rows } = await analysedProject();
+    await prisma.project.update({ where: { id: project.id }, data: { status: 'COMPLETED' } });
+    await prisma.clip.update({ where: { id: rows[0].id }, data: { title: 'La capicúa del año', hookText: 'Nadie lo vio venir' } });
+    await prisma.aISettings.upsert({ where: { userId }, create: { userId, aiMedia: true }, update: { aiMedia: true } });
+    await clips.generateThumbnail(userId, rows[0].id, { at: 2, background: 'ai', cutout: true, prompt: '   ', text: 'Capicúa' });
+    const data = queues.enqueued.at(-1)!.data as ThumbnailJobData;
+    expect(data).toMatchObject({ background: 'ai', cutout: true });
+    expect(data.prompt).toContain('La capicúa del año. Nadie lo vio venir');
+    expect(data.prompt).toContain('sin personas en primer plano');
+    // Se guarda lo que escribió el usuario (nada), no la descripción automática.
+    const saved = await prisma.clip.findUniqueOrThrow({ where: { id: rows[0].id } });
+    expect(saved.thumbConfig).toMatchObject({ background: 'ai', cutout: true, prompt: null });
+    expect(saved.thumbConfig).not.toHaveProperty('jobPrompt');
+    await pipeline.onFail(data.jobId, 'x', false, 1);
+
+    await clips.generateThumbnail(userId, rows[0].id, { at: 2, background: 'ai', prompt: 'mesa de dominó' });
+    expect((queues.enqueued.at(-1)!.data as ThumbnailJobData)).toMatchObject({ prompt: 'mesa de dominó', cutout: false });
+    await prisma.aISettings.update({ where: { userId }, data: { aiMedia: false } });
+  });
+
   it('combinar clips crea uno nuevo con los tramos en orden y no toca los originales', async () => {
     const { rows } = await analysedProject();
     const merged = await clips.merge(userId, [rows[1].id, rows[0].id]);

@@ -81,6 +81,7 @@
     "at": 101.5,
     "aspect": "HORIZONTAL",
     "background": "frame",
+    "cutout": true,
     "prompt": null,
     "text": "¡La capicúa del año!",
     "style": { "font": "Bebas Neue", "textColor": "#FFFFFF", "strokeColor": "#000000", "look": "outline", "position": "bottom", "size": "l", "uppercase": true },

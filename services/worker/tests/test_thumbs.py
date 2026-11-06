@@ -96,3 +96,67 @@ def test_ass_styles():
     ass = build_thumbnail_ass("hola {mundo}", style, 1280, 720)
     assert "HOLA (MUNDO)" in ass and ",3," in ass.split("Style: Thumb")[1]
     assert "Dialogue" not in build_thumbnail_ass("   ", style, 1280, 720)
+
+
+def _fake_person(settings, image):
+    """Máscara de una "persona": un rectángulo central que llega al borde inferior, más una mancha suelta."""
+    h, w = image.shape[:2]
+    mask = np.zeros((h, w), np.float32)
+    mask[h // 4:, w * 2 // 5: w * 3 // 5] = 1.0
+    mask[2:6, 2:6] = 1.0  # ruido que main_subject descarta
+    return mask
+
+
+def test_cutout_puts_the_person_over_a_blurred_frame_with_text_beside(env, tmp_path, monkeypatch):
+    from clipmaster_worker import segment
+
+    monkeypatch.setattr(segment, "person_mask", _fake_person)
+    r = run_thumbnail(env["ctx"]("t-cut"), _job(env, "t-cut", cutout=True, text="Tranque de seis"))
+    px = _pixels(env["storage"].download(r["key"], tmp_path / "cut.jpg"), tmp_path)
+    assert px.shape == (720, 1280, 3)
+    # Borde blanco alrededor de la persona (lado izquierdo del recorte, a media altura).
+    row = px[500]
+    assert (row > 235).all(axis=1).any()
+    # La persona queda a la derecha; el texto ocupa la mitad izquierda, no el cuarto derecho.
+    plain = run_thumbnail(env["ctx"]("t-cut0"), _job(env, "t-cut0", cutout=True, text=""))
+    p0 = _pixels(env["storage"].download(plain["key"], tmp_path / "cut0.jpg"), tmp_path)
+    diff = np.abs(px - p0).mean(axis=(0, 2))
+    assert diff[:600].mean() > 3 and diff[-250:].mean() < 1
+
+
+def test_cutout_vertical_and_ai_background(env, tmp_path, monkeypatch):
+    from clipmaster_worker import segment
+
+    monkeypatch.setattr(segment, "person_mask", _fake_person)
+
+    def fake_cover(settings, prompt, aspect, out, **kw):
+        run_ffmpeg(["-f", "lavfi", "-i", "color=c=blue:s=768x1344", "-frames:v", "1", str(out)])
+        return out
+
+    monkeypatch.setattr(nvidia_media, "cover_image", fake_cover)
+    r = run_thumbnail(env["ctx"]("t-cutv"), _job(env, "t-cutv", cutout=True, aspect="VERTICAL", background="ai",
+                                                 prompt="estudio", text="Capicúa"))
+    px = _pixels(env["storage"].download(r["key"], tmp_path / "cutv.jpg"), tmp_path)
+    assert px.shape == (1920, 1080, 3)
+    assert px[600:650, :60, 2].mean() > 150 and px[600:650, :60, 0].mean() < 60  # fondo azul de la "IA" a la vista
+    # La persona (64 % del alto) apoyada abajo: la franja superior es fondo + texto, sin persona.
+    assert px[1900:, 500:580].std() > 0
+
+
+def test_cutout_without_a_person_is_a_user_error(env, monkeypatch):
+    from clipmaster_worker import segment
+
+    monkeypatch.setattr(segment, "person_mask", lambda s, img: np.zeros(img.shape[:2], np.float32))
+    with pytest.raises(ValueError, match="ninguna persona"):
+        run_thumbnail(env["ctx"]("t-cutn"), _job(env, "t-cutn", cutout=True))
+
+
+def test_segment_download_checks_the_hash(tmp_path, monkeypatch):
+    import io
+
+    from clipmaster_worker import segment
+
+    monkeypatch.setattr(segment.urllib.request, "urlopen", lambda url, timeout: io.BytesIO(b"no es el modelo"))
+    with pytest.raises(MediaError, match="hash"):
+        segment.download(tmp_path / "m.onnx", url="https://example.invalid/m.onnx")
+    assert not (tmp_path / "m.onnx").exists() and not (tmp_path / "m.part").exists()

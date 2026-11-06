@@ -94,6 +94,9 @@ class Settings(BaseSettings):
     nvidia_image_function: str = ""
     nvidia_media_timeout_sec: float = 300.0
 
+    # Modelo local para recortar a la persona en miniaturas y portadas (se descarga si falta; ver segment.py).
+    segmentation_model_path: str = "/opt/models/u2net_human_seg.onnx"
+
     render_encoder: Literal["auto", "libx264", "h264_nvenc"] = "auto"
     render_preset: str = "veryfast"
     render_crf: int = 20

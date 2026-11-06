@@ -217,7 +217,11 @@ export const DEFAULT_THUMBNAIL_STYLE: ThumbnailStyle = {
 /** Tamaños de salida: vertical para TikTok/Reels/Shorts, 16:9 para YouTube (1280×720). */
 export const THUMBNAIL_SIZES: Record<AspectRatio, [number, number]> = { VERTICAL: [1080, 1920], HORIZONTAL: [1280, 720], SQUARE: [1080, 1080] };
 
-/** Miniatura de un clip: fotograma (con el encuadre del sujeto) o imagen de IA, con texto grande encima. */
+/**
+ * Miniatura o portada de un clip. Sin `cutout`: el fotograma encuadrado (o una imagen de IA) con texto grande.
+ * Con `cutout`: la persona del fotograma recortada con borde blanco sobre un fondo (el mismo video desenfocado o una
+ * imagen de IA) y el título al lado (16:9, 1:1) o encima (9:16).
+ */
 export interface ThumbnailJobData {
   kind: 'thumbnail';
   jobId: string;
@@ -229,6 +233,8 @@ export interface ThumbnailJobData {
   at: number;
   aspect: AspectRatio;
   background: 'frame' | 'ai';
+  /** Recortar a la persona del fotograma y ponerla delante del fondo. */
+  cutout?: boolean;
   prompt?: string | null;
   text: string;
   style: ThumbnailStyle;

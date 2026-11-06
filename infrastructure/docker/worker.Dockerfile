@@ -25,6 +25,13 @@ RUN pip install -r requirements.txt \
  && if [ "$GPU" = "1" ]; then pip install "nvidia-cublas-cu12==12.*" "nvidia-cudnn-cu12==9.*"; fi \
  && if [ "$INSTALL_TEST_TOOLS" = "1" ]; then pip install -r requirements-dev.txt; fi
 
+# Modelo de recorte de personas para miniaturas y portadas (U²-Net human seg, Apache 2.0, 176 MB). Se descarga
+# antes de copiar el código para que la capa quede en caché; el hash debe coincidir con MODEL_SHA256 de segment.py.
+ARG SEG_MODEL_URL=https://github.com/danielgatis/rembg/releases/download/v0.0.0/u2net_human_seg.onnx
+ARG SEG_MODEL_SHA256=01eb6a29a5c4d8edb30b56adad9bb3a2a0535338e480724a213e0acfd2d1c73c
+ENV SEGMENTATION_MODEL_PATH=/opt/models/u2net_human_seg.onnx
+RUN python -c "import hashlib,os,sys,urllib.request as u; p=os.environ['SEGMENTATION_MODEL_PATH']; os.makedirs(os.path.dirname(p),exist_ok=True); u.urlretrieve(sys.argv[1],p); h=hashlib.sha256(open(p,'rb').read()).hexdigest(); sys.exit(0 if h==sys.argv[2] else 'hash del modelo de recorte no coincide: '+h)" "$SEG_MODEL_URL" "$SEG_MODEL_SHA256"
+
 # Rutas de las bibliotecas CUDA instaladas por pip (inexistentes y sin efecto en la imagen CPU).
 ENV LD_LIBRARY_PATH=/usr/local/lib/python3.12/site-packages/nvidia/cublas/lib:/usr/local/lib/python3.12/site-packages/nvidia/cudnn/lib
 

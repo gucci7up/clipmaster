@@ -275,21 +275,23 @@ export class ClipsService {
     const style: ThumbnailStyle = { ...DEFAULT_THUMBNAIL_STYLE, ...sanitizeThumbStyle(input.style ?? {}) };
     if (style.font.startsWith('custom:')) await this.assertFont(userId, style.font);
     const background = input.background === 'ai' ? 'ai' : 'frame';
+    const cutout = input.cutout === true;
     const prompt = input.prompt?.replace(/\s+/g, ' ').trim().slice(0, 600) || null;
     if (background === 'ai') {
       const ai = await this.prisma.aISettings.findUnique({ where: { userId } });
       if (!ai?.aiMedia) throw new BadRequestException('Activa «Funciones de IA de NVIDIA» en Ajustes para generar el fondo con IA');
-      if (!prompt) throw new BadRequestException('Describe la imagen de fondo');
     }
+    // Sin descripción, el fondo se pide a partir del título y el gancho del clip.
+    const jobPrompt = background === 'ai' && !prompt ? thumbnailPrompt(clip.title, clip.hookText, cutout) : null;
     const running = await this.prisma.processingJob.findFirst({
       where: { dedupeKey: { startsWith: `thumbnail:${id}:` }, status: { in: [JobStatus.QUEUED, JobStatus.RUNNING] } },
     });
     if (running) throw new ConflictException('Ya se está generando la miniatura de este clip');
     await this.pipeline.enqueueThumbnail(id, {
-      at: Math.round(input.at * 100) / 100, aspect: input.aspect ?? clip.aspect, background, prompt,
+      at: Math.round(input.at * 100) / 100, aspect: input.aspect ?? clip.aspect, background, cutout, prompt, jobPrompt,
       text: (input.text ?? '').replace(/\s+/g, ' ').trim().slice(0, 120), style,
     });
-    await this.audit.log(userId, 'clip.thumbnail_requested', id, null, { background });
+    await this.audit.log(userId, 'clip.thumbnail_requested', id, null, { background, cutout, autoPrompt: !!jobPrompt });
     return this.detail(userId, id);
   }
 
@@ -385,9 +387,17 @@ export interface ThumbnailInput {
   at: number;
   aspect?: AspectRatio;
   background?: 'frame' | 'ai';
+  cutout?: boolean;
   prompt?: string | null;
   text?: string;
   style?: Partial<ThumbnailStyle>;
+}
+
+/** Descripción para FLUX hecha con los datos del clip, cuando el usuario no escribe una. */
+export function thumbnailPrompt(title: string, hook: string | null | undefined, cutout: boolean): string {
+  const topic = [title, hook].map((t) => t?.replace(/\s+/g, ' ').trim()).filter(Boolean).join('. ').slice(0, 300);
+  return `Imagen de fondo para la miniatura de un video sobre: ${topic}. Escena relacionada con el tema, fotografía realista, ` +
+    `colores vivos, iluminación cinematográfica, sin texto ni letras${cutout ? ', sin personas en primer plano' : ''}.`;
 }
 
 export function sanitizeThumbStyle(s: Partial<ThumbnailStyle>): Partial<ThumbnailStyle> {

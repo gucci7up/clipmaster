@@ -173,7 +173,7 @@ export interface Clip {
   socialStatus: 'PENDING' | 'READY' | 'FAILED' | null;
   socialError: string | null;
   /** Miniatura con texto: última configuración, imagen y estado. */
-  thumbConfig: { at: number; aspect: AspectRatio; background: 'frame' | 'ai'; prompt: string | null; text: string; style: ThumbnailStyle } | null;
+  thumbConfig: { at: number; aspect: AspectRatio; background: 'frame' | 'ai'; cutout?: boolean; prompt: string | null; text: string; style: ThumbnailStyle } | null;
   thumbUrl: string | null;
   thumbDownloadUrl: string | null;
   thumbStatus: 'PENDING' | 'READY' | 'FAILED' | null;

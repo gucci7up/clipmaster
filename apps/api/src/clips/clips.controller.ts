@@ -51,6 +51,7 @@ class ThumbnailDto {
   @Type(() => Number) @IsNumber() @Min(0) at: number;
   @IsOptional() @IsEnum(AspectRatio) aspect?: AspectRatio;
   @IsOptional() @IsIn(['frame', 'ai']) background?: 'frame' | 'ai';
+  @IsOptional() @IsBoolean() cutout?: boolean;
   @IsOptional() @ValidateIf((_o, v) => v !== null) @IsString() @MaxLength(600) prompt?: string | null;
   @IsOptional() @IsString() @MaxLength(120) text?: string;
   @IsOptional() @IsObject() style?: Partial<ThumbnailStyle>;

@@ -97,7 +97,8 @@ export default function ClipEditorPage() {
             end: merged ? undefined : d.end,
             hookText: d.hookText.trim() || null,
             hookVoice: d.hookVoice || null,
-            coverPrompt: d.coverPrompt.trim() || null,
+            // La portada de sólo imagen se sustituyó por la de «Miniatura» (persona recortada + título): ya no se pide.
+            coverPrompt: null,
             manualX: d.reframeMode === 'manual' ? d.manualX : null,
             manualY: null,
           },
@@ -282,13 +283,13 @@ function AiEffects({ clip, d, set, enabled, available }: {
   clip: Clip; d: Draft; set: <K extends keyof Draft>(k: K, v: Draft[K]) => void; enabled: boolean; available: boolean;
 }) {
   const status = clip.currentRender?.aiStatus ?? null;
-  const used = d.aiEyeContact || d.aiRelight != null || !!d.hookVoice || !!d.coverPrompt.trim();
+  const used = d.aiEyeContact || d.aiRelight != null || !!d.hookVoice;
   if (!enabled && !used && !status) {
     return (
       <Card>
         <CardHeader><CardTitle>Efectos IA (NVIDIA)</CardTitle></CardHeader>
         <CardContent className="text-xs text-muted-foreground">
-          {available ? <>Actívalos en <Link href="/ajustes" className="underline">Ajustes → Funciones de IA de NVIDIA</Link>: mirada a cámara, iluminación, voz del gancho y portada.</> : 'No disponibles: el administrador no ha configurado la clave de NVIDIA.'}
+          {available ? <>Actívalos en <Link href="/ajustes" className="underline">Ajustes → Funciones de IA de NVIDIA</Link>: mirada a cámara, iluminación y voz del gancho.</> : 'No disponibles: el administrador no ha configurado la clave de NVIDIA.'}
         </CardContent>
       </Card>
     );
@@ -314,13 +315,10 @@ function AiEffects({ clip, d, set, enabled, available }: {
           </Select>
           {!d.hookEnabled && <p className="text-xs text-muted-foreground">Activa el título gancho para que una voz lo lea.</p>}
         </div>
-        <div className="space-y-1">
-          <Label htmlFor="cover">Portada generada</Label>
-          <Input id="cover" maxLength={600} placeholder="Describe la imagen (p. ej. mesa de dominó al atardecer)" value={d.coverPrompt} disabled={!enabled && !d.coverPrompt} onChange={(e) => set('coverPrompt', e.target.value)} />
-        </div>
+        <p className="text-xs text-muted-foreground">La portada se crea en la tarjeta «Miniatura»: la persona del video recortada, el título y un fondo del propio video o hecho con IA.</p>
         {clip.coverUrl && (
           <div className="flex items-end gap-3">
-            <img src={clip.coverUrl} alt="Portada generada" className="max-h-40 rounded-lg border" />
+            <img src={clip.coverUrl} alt="Portada anterior" className="max-h-40 rounded-lg border" />
             {clip.coverDownloadUrl && <Button size="sm" variant="outline" asChild><a href={clip.coverDownloadUrl}><Download /> Portada</a></Button>}
           </div>
         )}

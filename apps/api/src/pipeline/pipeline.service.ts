@@ -492,7 +492,15 @@ export class PipelineService {
   }
 
   /** Encola la miniatura de un clip. `at` es relativo al clip (en los combinados, a su línea de tiempo). */
-  async enqueueThumbnail(clipId: string, input: { at: number; aspect: AspectRatio; background: 'frame' | 'ai'; prompt: string | null; text: string; style: ThumbnailStyle }) {
+  /**
+   * Miniatura/portada del clip. `prompt` es lo que escribió el usuario (se guarda tal cual en thumbConfig);
+   * `jobPrompt` es el que se envía a FLUX (el del usuario o uno hecho con los datos del clip).
+   */
+  async enqueueThumbnail(clipId: string, input: {
+    at: number; aspect: AspectRatio; background: 'frame' | 'ai'; cutout: boolean; prompt: string | null; jobPrompt?: string | null;
+    text: string; style: ThumbnailStyle;
+  }) {
+    const { jobPrompt, ...config } = input;
     const clip = await this.prisma.clip.findUniqueOrThrow({ where: { id: clipId }, include: { project: true } });
     const project = clip.project;
     const ranges = asRanges(clip.segments) ?? [{ start: clip.start, end: clip.end }];
@@ -514,11 +522,11 @@ export class PipelineService {
     }
     await this.prisma.clip.update({
       where: { id: clip.id },
-      data: { thumbConfig: input as unknown as Prisma.InputJsonValue, thumbStatus: 'PENDING', thumbError: null },
+      data: { thumbConfig: config as unknown as Prisma.InputJsonValue, thumbStatus: 'PENDING', thumbError: null },
     });
     return this.createJob(project, JobType.THUMBNAIL, `thumbnail:${clip.id}:${Date.now()}`, (jobId): ThumbnailJobData => ({
       kind: 'thumbnail', jobId, projectId: project.id, userId: project.userId, clipId: clip.id, sources, at,
-      aspect: input.aspect, background: input.background, prompt: input.prompt, text: input.text, style, fonts,
+      aspect: input.aspect, background: input.background, cutout: input.cutout, prompt: jobPrompt ?? input.prompt, text: input.text, style, fonts,
       reframe: { mode: clip.reframeMode as 'auto' | 'center' | 'manual', manualX: clip.manualX, manualY: clip.manualY },
       outputPrefix: prefixFor('thumbnails', project.userId, project.id),
     }));

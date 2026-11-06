@@ -234,6 +234,7 @@ class ThumbnailJobData(_Model):
     at: float = Field(ge=0)
     aspect: AspectRatio
     background: Literal["frame", "ai"] = "frame"
+    cutout: bool = False
     prompt: Optional[str] = Field(default=None, max_length=600)
     text: str = Field(default="", max_length=120)
     style: ThumbnailStyle = Field(default_factory=ThumbnailStyle)
