@@ -5,7 +5,7 @@
  *
  *   TEST_DATABASE_URL=postgresql://... pnpm --filter @clipmaster/api test
  */
-import type { AnalyzeResult, AnyJobData, CopyJobData, ImportResult, RenderJobData } from '@clipmaster/shared';
+import type { AnalyzeResult, AnyJobData, CopyJobData, ImportResult, RenderJobData, ThumbnailJobData } from '@clipmaster/shared';
 import { ClipsService } from '../src/clips/clips.service';
 import type { AuditService } from '../src/common/audit.service';
 import type { PrismaService } from '../src/common/prisma.service';
@@ -222,6 +222,45 @@ run('editor de clips (PostgreSQL real)', () => {
     expect(after.socialCopy).toMatchObject({ title: 'Klk' }); // se conserva el texto anterior
     expect((await prisma.project.findUniqueOrThrow({ where: { id: project.id } })).status).toBe('COMPLETED');
     await prisma.aISettings.update({ where: { userId }, data: { semanticLLM: false } });
+  });
+
+  it('la miniatura se encola en el instante del clip y su resultado reemplaza a la anterior', async () => {
+    const { project, rows } = await analysedProject();
+    await prisma.project.update({ where: { id: project.id }, data: { status: 'COMPLETED' } });
+    await expect(clips.generateThumbnail(userId, rows[0].id, { at: 99 })).rejects.toThrow('fuera del clip');
+    await expect(clips.generateThumbnail(userId, rows[0].id, { at: 2, background: 'ai', prompt: 'mesa' })).rejects.toThrow('Funciones de IA');
+
+    const pending = await clips.generateThumbnail(userId, rows[0].id, {
+      at: 7, aspect: 'HORIZONTAL', text: '  la   capicúa ', style: { size: 'xl', textColor: '#ff0000', look: 'nope' as never },
+    });
+    expect(pending.thumbStatus).toBe('PENDING');
+    const job = queues.enqueued.at(-1)!;
+    expect(job.queue).toBe('render');
+    const data = job.data as ThumbnailJobData;
+    expect(data).toMatchObject({ kind: 'thumbnail', at: 12, aspect: 'HORIZONTAL', background: 'frame', text: 'la capicúa' });
+    expect(data.style).toMatchObject({ size: 'xl', textColor: '#FF0000', look: 'outline', font: 'Bebas Neue' });
+    expect(data.outputPrefix).toBe(`thumbnails/${userId}/${project.id}`);
+    await expect(clips.generateThumbnail(userId, rows[0].id, { at: 1 })).rejects.toThrow('Ya se está generando');
+
+    await pipeline.onStart(data.jobId);
+    await pipeline.onComplete(data.jobId, { key: `thumbnails/${userId}/${project.id}/custom-a.jpg`, width: 1280, height: 720 });
+    let c = await clips.detail(userId, rows[0].id);
+    expect(c).toMatchObject({ thumbStatus: 'READY', thumbKey: `thumbnails/${userId}/${project.id}/custom-a.jpg` });
+    expect(c.thumbUrl).toContain('v=custom-a'); // cambia con cada miniatura para no servir la anterior desde caché
+
+    await clips.generateThumbnail(userId, rows[0].id, { at: 3 });
+    const second = queues.enqueued.at(-1)!.data as ThumbnailJobData;
+    await pipeline.onStart(second.jobId);
+    await pipeline.onComplete(second.jobId, { key: `thumbnails/${userId}/${project.id}/custom-b.jpg`, width: 1080, height: 1920 });
+    const old = await prisma.storageAsset.findUnique({ where: { key: `thumbnails/${userId}/${project.id}/custom-a.jpg` } });
+    expect(old?.temporary).toBe(true);
+
+    await clips.generateThumbnail(userId, rows[0].id, { at: 3 });
+    const failed = queues.enqueued.at(-1)!.data as ThumbnailJobData;
+    await pipeline.onFail(failed.jobId, 'El instante elegido está fuera del video', false, 1);
+    c = await clips.detail(userId, rows[0].id);
+    expect(c).toMatchObject({ thumbStatus: 'FAILED', thumbKey: `thumbnails/${userId}/${project.id}/custom-b.jpg` });
+    expect((await prisma.project.findUniqueOrThrow({ where: { id: project.id } })).status).toBe('COMPLETED');
   });
 
   it('combinar clips crea uno nuevo con los tramos en orden y no toca los originales', async () => {

@@ -10,7 +10,7 @@ import { StorageService } from '../common/storage.service';
 import { env } from '../config/env';
 import type { MediaKind } from './media.service';
 
-const KINDS: MediaKind[] = ['original', 'render', 'thumb', 'cover', 'segment', 'subtitle'];
+const KINDS: MediaKind[] = ['original', 'render', 'thumb', 'cover', 'clipthumb', 'segment', 'subtitle'];
 
 /**
  * Sirve medios privados de MinIO a través de la API con URLs firmadas y soporte Range,
@@ -79,6 +79,12 @@ export class MediaController {
         return kind === 'render'
           ? { key, contentType: 'video/mp4', filename: `${safeTitle}.mp4` }
           : { key, contentType: 'image/jpeg', filename: `${safeTitle}${kind === 'cover' ? '-portada' : ''}.jpg` };
+      }
+      case 'clipthumb': {
+        const c = await this.prisma.clip.findUnique({ where: { id } });
+        if (!c?.thumbKey || c.deletedAt) break;
+        const safeTitle = c.title.normalize('NFKD').replace(/[^\w\- ]+/g, '').trim().replace(/\s+/g, '-').slice(0, 60) || 'clip';
+        return { key: c.thumbKey, contentType: 'image/jpeg', filename: `${safeTitle}-miniatura.jpg` };
       }
       case 'subtitle': {
         const t = await this.prisma.subtitleTrack.findUnique({ where: { id } });

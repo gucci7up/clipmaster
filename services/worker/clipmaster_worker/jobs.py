@@ -30,6 +30,7 @@ from .contracts import (
     QUEUE_RENDER,
     AnalyzeJobData,
     CopyJobData,
+    ThumbnailJobData,
     ImportJobData,
     LiveCaptureJobData,
     RenderJobData,
@@ -126,6 +127,10 @@ class JobRunner:
             from .social import run_copy
 
             return run_copy(ctx, job)
+        if isinstance(job, ThumbnailJobData):
+            from .thumbs import run_thumbnail
+
+            return run_thumbnail(ctx, job)
         raise ValueError("Job no soportado")
 
     def heartbeat(self, role: str, device: str) -> None:

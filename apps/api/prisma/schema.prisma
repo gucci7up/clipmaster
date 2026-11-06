@@ -68,6 +68,8 @@ enum JobType {
   CLEANUP
   /// Título, descripción y hashtags de un clip con el LLM.
   COPY
+  /// Miniatura con texto de un clip.
+  THUMBNAIL
 }
 
 enum JobStatus {
@@ -365,6 +367,12 @@ model Clip {
   /// PENDING | READY | FAILED, o null si nunca se pidió.
   socialStatus  String?
   socialError   String?
+  /// Miniatura con texto: lo último que pidió el usuario ({ at, aspect, background, prompt, text, style }).
+  thumbConfig   Json?
+  thumbKey      String?
+  /// PENDING | READY | FAILED, o null si nunca se pidió.
+  thumbStatus   String?
+  thumbError    String?
   status        ClipStatus  @default(PENDING)
   currentRenderId String?   @db.Uuid
   deletedAt     DateTime?

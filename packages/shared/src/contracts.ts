@@ -198,7 +198,52 @@ export interface CopyResult extends SocialCopy {
   model: string;
 }
 
-export type AnyJobData = ImportJobData | LiveCaptureJobData | AnalyzeJobData | RenderJobData | CopyJobData;
+/** Estilo del texto de la miniatura. */
+export interface ThumbnailStyle {
+  font: string;
+  textColor: string;
+  strokeColor: string;
+  /** outline: borde grueso alrededor de las letras · box: caja de color detrás del texto. */
+  look: 'outline' | 'box';
+  position: 'top' | 'center' | 'bottom';
+  size: 'm' | 'l' | 'xl';
+  uppercase: boolean;
+}
+
+export const DEFAULT_THUMBNAIL_STYLE: ThumbnailStyle = {
+  font: 'Bebas Neue', textColor: '#FFFFFF', strokeColor: '#000000', look: 'outline', position: 'bottom', size: 'l', uppercase: true,
+};
+
+/** Tamaños de salida: vertical para TikTok/Reels/Shorts, 16:9 para YouTube (1280×720). */
+export const THUMBNAIL_SIZES: Record<AspectRatio, [number, number]> = { VERTICAL: [1080, 1920], HORIZONTAL: [1280, 720], SQUARE: [1080, 1080] };
+
+/** Miniatura de un clip: fotograma (con el encuadre del sujeto) o imagen de IA, con texto grande encima. */
+export interface ThumbnailJobData {
+  kind: 'thumbnail';
+  jobId: string;
+  projectId: string;
+  userId: string;
+  clipId: string;
+  sources: MediaSource[];
+  /** Instante del fotograma en la línea de tiempo del proyecto. */
+  at: number;
+  aspect: AspectRatio;
+  background: 'frame' | 'ai';
+  prompt?: string | null;
+  text: string;
+  style: ThumbnailStyle;
+  fonts?: { key: string; family: string }[];
+  reframe: { mode: 'auto' | 'center' | 'manual'; manualX?: number | null; manualY?: number | null };
+  outputPrefix: string;
+}
+
+export interface ThumbnailResult {
+  key: string;
+  width: number;
+  height: number;
+}
+
+export type AnyJobData = ImportJobData | LiveCaptureJobData | AnalyzeJobData | RenderJobData | CopyJobData | ThumbnailJobData;
 
 // ---------- Resultados ----------
 

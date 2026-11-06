@@ -1,6 +1,6 @@
 import { BadRequestException, ConflictException, Injectable, NotFoundException } from '@nestjs/common';
 import { AspectRatio, ClipStatus, JobStatus, JobType, Prisma } from '@prisma/client';
-import { BUILTIN_FONTS, DEFAULT_SUBTITLE_STYLE, HOOK_VOICES, RELIGHT_PRESETS, SUBTITLE_PRESETS, SubtitleStyle, Word } from '@clipmaster/shared';
+import { BUILTIN_FONTS, DEFAULT_SUBTITLE_STYLE, DEFAULT_THUMBNAIL_STYLE, ThumbnailStyle, HOOK_VOICES, RELIGHT_PRESETS, SUBTITLE_PRESETS, SubtitleStyle, Word } from '@clipmaster/shared';
 import { AuditService } from '../common/audit.service';
 import { searchMoments } from './moments';
 import { PrismaService } from '../common/prisma.service';
@@ -71,6 +71,9 @@ export class ClipsService {
       thumbnailUrl: current?.thumbnailKey ? this.media.url('thumb', current.id) : null,
       coverUrl: current?.coverKey ? this.media.url('cover', current.id) : null,
       coverDownloadUrl: current?.coverKey ? this.media.url('cover', current.id, { download: true }) : null,
+      // `v` cambia con cada miniatura nueva para que el navegador no muestre la anterior desde su caché.
+      thumbUrl: c.thumbKey ? `${this.media.url('clipthumb', c.id)}&v=${c.thumbKey.slice(-12, -4)}` : null,
+      thumbDownloadUrl: c.thumbKey ? this.media.url('clipthumb', c.id, { download: true }) : null,
       subtitleUrl: c.subtitleTracks?.[0] ? this.media.url('subtitle', c.subtitleTracks[0].id, { download: true }) : null,
       currentRender: current,
     });
@@ -261,6 +264,35 @@ export class ClipsService {
     return this.detail(userId, id);
   }
 
+  /**
+   * Miniatura con texto: fotograma del clip (o fondo de IA) con un título grande. El fondo de IA usa
+   * FLUX.2 klein de NVIDIA, así que exige el permiso «Funciones de IA de NVIDIA».
+   */
+  async generateThumbnail(userId: string, id: string, input: ThumbnailInput) {
+    const clip = await this.owned(userId, id);
+    const duration = this.ranges(clip).reduce((a, r) => a + r.end - r.start, 0);
+    if (!(input.at >= 0 && input.at <= duration)) throw new BadRequestException('El instante está fuera del clip');
+    const style: ThumbnailStyle = { ...DEFAULT_THUMBNAIL_STYLE, ...sanitizeThumbStyle(input.style ?? {}) };
+    if (style.font.startsWith('custom:')) await this.assertFont(userId, style.font);
+    const background = input.background === 'ai' ? 'ai' : 'frame';
+    const prompt = input.prompt?.replace(/\s+/g, ' ').trim().slice(0, 600) || null;
+    if (background === 'ai') {
+      const ai = await this.prisma.aISettings.findUnique({ where: { userId } });
+      if (!ai?.aiMedia) throw new BadRequestException('Activa «Funciones de IA de NVIDIA» en Ajustes para generar el fondo con IA');
+      if (!prompt) throw new BadRequestException('Describe la imagen de fondo');
+    }
+    const running = await this.prisma.processingJob.findFirst({
+      where: { dedupeKey: { startsWith: `thumbnail:${id}:` }, status: { in: [JobStatus.QUEUED, JobStatus.RUNNING] } },
+    });
+    if (running) throw new ConflictException('Ya se está generando la miniatura de este clip');
+    await this.pipeline.enqueueThumbnail(id, {
+      at: Math.round(input.at * 100) / 100, aspect: input.aspect ?? clip.aspect, background, prompt,
+      text: (input.text ?? '').replace(/\s+/g, ' ').trim().slice(0, 120), style,
+    });
+    await this.audit.log(userId, 'clip.thumbnail_requested', id, null, { background });
+    return this.detail(userId, id);
+  }
+
   /** «Encontrar momentos»: busca en la transcripción del proyecto (sin IA externa). */
   async moments(userId: string, projectId: string, query: string) {
     await this.ownedProject(userId, projectId);
@@ -333,7 +365,7 @@ export class ClipsService {
 
   async remove(userId: string, id: string) {
     const clip = await this.owned(userId, id);
-    const keys = clip.renders.flatMap((r) => [r.outputKey, r.thumbnailKey, r.coverKey]).filter((k): k is string => Boolean(k));
+    const keys = [...clip.renders.flatMap((r) => [r.outputKey, r.thumbnailKey, r.coverKey]), clip.thumbKey].filter((k): k is string => Boolean(k));
     await this.prisma.$transaction([
       this.prisma.clip.update({ where: { id }, data: { deletedAt: new Date() } }),
       this.prisma.storageAsset.updateMany({ where: { key: { in: keys } }, data: { temporary: true, expiresAt: new Date() } }),
@@ -348,6 +380,26 @@ function clamp01(v: number | null): number | null {
 }
 
 const COLOR = /^#[0-9a-fA-F]{6}$/;
+
+export interface ThumbnailInput {
+  at: number;
+  aspect?: AspectRatio;
+  background?: 'frame' | 'ai';
+  prompt?: string | null;
+  text?: string;
+  style?: Partial<ThumbnailStyle>;
+}
+
+export function sanitizeThumbStyle(s: Partial<ThumbnailStyle>): Partial<ThumbnailStyle> {
+  const out: Partial<ThumbnailStyle> = {};
+  if (typeof s.font === 'string' && ((BUILTIN_FONTS as readonly string[]).includes(s.font) || /^custom:[0-9a-f-]{36}$/.test(s.font))) out.font = s.font;
+  for (const k of ['textColor', 'strokeColor'] as const) if (typeof s[k] === 'string' && COLOR.test(s[k])) out[k] = s[k].toUpperCase();
+  if (s.look === 'outline' || s.look === 'box') out.look = s.look;
+  if (s.position && ['top', 'center', 'bottom'].includes(s.position)) out.position = s.position;
+  if (s.size && ['m', 'l', 'xl'].includes(s.size)) out.size = s.size;
+  if (s.uppercase != null) out.uppercase = Boolean(s.uppercase);
+  return out;
+}
 export function sanitizeStyle(s: Partial<SubtitleStyle>): Partial<SubtitleStyle> {
   const out: Partial<SubtitleStyle> = {};
   const num = (v: unknown, min: number, max: number, round = true): number | undefined => {

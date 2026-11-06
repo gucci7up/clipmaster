@@ -70,5 +70,22 @@
     "title": "La capicúa del año",
     "mode": "DOMINO",
     "language": "es"
+  },
+  {
+    "kind": "thumbnail",
+    "jobId": "2b0a8d7e-5f1c-4d2e-8a3b-9c4d5e6f7a80",
+    "projectId": "a3c1",
+    "userId": "u1",
+    "clipId": "0b9a",
+    "sources": [{ "key": "originals/u1/a3c1/o.mp4", "offsetSec": 0, "durationSec": 600 }],
+    "at": 101.5,
+    "aspect": "HORIZONTAL",
+    "background": "frame",
+    "prompt": null,
+    "text": "¡La capicúa del año!",
+    "style": { "font": "Bebas Neue", "textColor": "#FFFFFF", "strokeColor": "#000000", "look": "outline", "position": "bottom", "size": "l", "uppercase": true },
+    "fonts": [],
+    "reframe": { "mode": "auto" },
+    "outputPrefix": "thumbnails/u1/a3c1"
   }
 ]

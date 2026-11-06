@@ -119,6 +119,15 @@ Las aplica el render-worker sólo si el administrador configuró `NVIDIA_API_KEY
 - Si una función falla (sin créditos, límite, error del servicio), el clip se entrega sin ella y `ClipRender.aiStatus` guarda el motivo, que el editor muestra.
 - **No integrado:** detección de hablante activo (necesita diarización y el Parakeet alojado no la devuelve), Chatterbox (redundante con Magpie), FLUX.1 schnell (no responde), Stable Diffusion 3.5 (sólo descargable y no comercial), Cosmos y Wan (no disponibles con esta clave). Generar video con IA no está disponible.
 
+### Miniaturas (`services/worker/clipmaster_worker/thumbs.py`)
+
+Desde el editor del clip se genera una miniatura con texto grande, en un job `thumbnail` de la cola de render:
+- **Fondo de fotograma:** el usuario elige el instante en el clip; se toma del video original (sin subtítulos), se recorta al formato de salida centrando el rostro o el movimiento de ese instante (o el encuadre manual del clip) y se le sube un poco el contraste y la saturación.
+- **Fondo con IA:** FLUX.2 klein de NVIDIA a partir de una descripción (requiere «Funciones de IA de NVIDIA»). Unos 4 s. Como todos los modelos de imagen, puede dibujar mal detalles finos como los puntos de las fichas o letras.
+- **Texto:** se compone con libass, con las mismas fuentes que los subtítulos (incluidas las propias). Borde grueso o caja de color, arriba, centro o abajo, en tres tamaños.
+- **Tamaños:** 1080×1920 (TikTok, Reels, Shorts), 1280×720 (YouTube) y 1080×1080.
+- Cada miniatura nueva reemplaza a la anterior, que queda marcada para limpieza.
+
 ### Texto para publicar (`services/worker/clipmaster_worker/social.py`)
 
 Desde el editor del clip, «Generar con IA» crea un job `copy` en la cola de IA. El ai-worker pide al LLM configurado (Ollama o NVIDIA) un título, una descripción y de 4 a 8 hashtags a partir del texto del clip, con las correcciones del usuario.

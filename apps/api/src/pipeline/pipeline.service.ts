@@ -1,5 +1,6 @@
 import { BadRequestException, ConflictException, Injectable, Logger } from '@nestjs/common';
 import {
+  AspectRatio,
   AssetKind,
   CaptureStatus,
   ClipStatus,
@@ -15,7 +16,11 @@ import {
   AnyJobData,
   CopyJobData,
   CopyResult,
+  ThumbnailJobData,
+  ThumbnailResult,
+  ThumbnailStyle,
   DEFAULT_SUBTITLE_STYLE,
+  DEFAULT_THUMBNAIL_STYLE,
   ImportResult,
   LiveCaptureResult,
   MediaSource,
@@ -65,7 +70,11 @@ const TYPE_QUEUE: Record<JobType, QueueName> = {
   RENDER: Queues.RENDER,
   CLEANUP: Queues.CAPTURE,
   COPY: Queues.AI,
+  THUMBNAIL: Queues.RENDER,
 };
+
+/** Jobs de un clip que no forman parte del procesamiento del proyecto (no cambian su estado). */
+const SIDE_JOBS: JobType[] = [JobType.COPY, JobType.THUMBNAIL];
 
 type JobRow = Prisma.ProcessingJobGetPayload<{ include: { project: true } }>;
 
@@ -403,6 +412,9 @@ export class PipelineService {
       case JobType.COPY:
         await this.completeCopy(job, result as CopyResult);
         break;
+      case JobType.THUMBNAIL:
+        await this.completeThumbnail(job, result as ThumbnailResult);
+        break;
       default:
         break;
     }
@@ -410,8 +422,7 @@ export class PipelineService {
       where: { id: job.id },
       data: { status: JobStatus.COMPLETED, finishedAt: new Date(), progress: 1, result: summarize(result) },
     });
-    // El texto de publicación no forma parte del procesamiento del proyecto.
-    if (job.type !== JobType.COPY) await this.checkCompletion(job.projectId);
+    if (!SIDE_JOBS.includes(job.type)) await this.checkCompletion(job.projectId);
     return { ok: true };
   }
 
@@ -443,6 +454,11 @@ export class PipelineService {
       await this.prisma.clip.update({ where: { id: p.clipId }, data: { socialStatus: 'FAILED', socialError: error.slice(0, 500) } }).catch(() => undefined);
       return;
     }
+    if (job.type === JobType.THUMBNAIL) {
+      const p = job.payload as unknown as ThumbnailJobData;
+      await this.prisma.clip.update({ where: { id: p.clipId }, data: { thumbStatus: 'FAILED', thumbError: error.slice(0, 500) } }).catch(() => undefined);
+      return;
+    }
     if (job.type === JobType.RENDER) {
       const p = job.payload as unknown as RenderJobData;
       await this.prisma.clipRender.update({ where: { id: p.renderId }, data: { status: ClipStatus.FAILED, error: error.slice(0, 2000), finishedAt: new Date() } }).catch(() => undefined);
@@ -462,6 +478,51 @@ export class PipelineService {
   }
 
   // ---------------------------------------------------------------- resultados
+
+  private async completeThumbnail(job: JobRow, r: ThumbnailResult) {
+    const p = job.payload as unknown as ThumbnailJobData;
+    const clip = await this.prisma.clip.findUnique({ where: { id: p.clipId } });
+    if (!clip) return;
+    await this.prisma.clip.update({ where: { id: clip.id }, data: { thumbKey: r.key, thumbStatus: 'READY', thumbError: null } });
+    await this.trackAsset(job.project.userId, job.projectId, AssetKind.THUMBNAIL, r.key, 0, 'image/jpeg');
+    // La miniatura anterior deja de usarse: la limpieza la borrará.
+    if (clip.thumbKey && clip.thumbKey !== r.key) {
+      await this.prisma.storageAsset.updateMany({ where: { key: clip.thumbKey }, data: { temporary: true, expiresAt: new Date() } });
+    }
+  }
+
+  /** Encola la miniatura de un clip. `at` es relativo al clip (en los combinados, a su línea de tiempo). */
+  async enqueueThumbnail(clipId: string, input: { at: number; aspect: AspectRatio; background: 'frame' | 'ai'; prompt: string | null; text: string; style: ThumbnailStyle }) {
+    const clip = await this.prisma.clip.findUniqueOrThrow({ where: { id: clipId }, include: { project: true } });
+    const project = clip.project;
+    const ranges = asRanges(clip.segments) ?? [{ start: clip.start, end: clip.end }];
+    let rest = Math.max(0, input.at);
+    let at = ranges[ranges.length - 1].end - 0.05;
+    for (const r of ranges) {
+      if (rest < r.end - r.start) { at = r.start + rest; break; }
+      rest -= r.end - r.start;
+    }
+    const sources = await this.sourcesFor(project.id, at, at + 0.1);
+    if (!sources.length) throw new BadRequestException('No hay video fuente disponible para ese instante');
+    const style = { ...input.style };
+    const fonts: { key: string; family: string }[] = [];
+    const custom = /^custom:([0-9a-f-]{36})$/.exec(style.font);
+    if (custom) {
+      const font = await this.prisma.userFont.findFirst({ where: { id: custom[1], userId: project.userId } });
+      if (font) fonts.push({ key: font.storageKey, family: font.family });
+      style.font = font?.family ?? DEFAULT_THUMBNAIL_STYLE.font;
+    }
+    await this.prisma.clip.update({
+      where: { id: clip.id },
+      data: { thumbConfig: input as unknown as Prisma.InputJsonValue, thumbStatus: 'PENDING', thumbError: null },
+    });
+    return this.createJob(project, JobType.THUMBNAIL, `thumbnail:${clip.id}:${Date.now()}`, (jobId): ThumbnailJobData => ({
+      kind: 'thumbnail', jobId, projectId: project.id, userId: project.userId, clipId: clip.id, sources, at,
+      aspect: input.aspect, background: input.background, prompt: input.prompt, text: input.text, style, fonts,
+      reframe: { mode: clip.reframeMode as 'auto' | 'center' | 'manual', manualX: clip.manualX, manualY: clip.manualY },
+      outputPrefix: prefixFor('thumbnails', project.userId, project.id),
+    }));
+  }
 
   private async completeCopy(job: JobRow, r: CopyResult) {
     const p = job.payload as unknown as CopyJobData;

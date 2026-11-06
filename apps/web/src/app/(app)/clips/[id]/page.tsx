@@ -11,6 +11,7 @@ import { toast } from 'sonner';
 import { ErrorState, ScoreBadge } from '@/components/common';
 import { ScoreBreakdown, StyleLibrary, WordsEditor } from '@/components/clip-tools';
 import { SocialCopyCard } from '@/components/social-copy';
+import { ThumbnailMaker } from '@/components/thumbnail-maker';
 import { SubtitleControls } from '@/components/subtitle-controls';
 import { Badge, Button, Card, CardContent, CardHeader, CardTitle, ConfirmButton, Input, Label, Select, Skeleton, Switch } from '@/components/ui';
 import { api, ApiError, Clip, ProjectDetail } from '@/lib/api';
@@ -53,7 +54,7 @@ export default function ClipEditorPage() {
   const { id } = useParams<{ id: string }>();
   const router = useRouter();
   const { data: clip, error, mutate } = useSWR<Clip>(`/clips/${id}`, {
-    refreshInterval: (c) => (c && (c.status === 'PENDING' || c.status === 'RENDERING' || c.socialStatus === 'PENDING') ? 4000 : 0),
+    refreshInterval: (c) => (c && (c.status === 'PENDING' || c.status === 'RENDERING' || c.socialStatus === 'PENDING' || c.thumbStatus === 'PENDING') ? 4000 : 0),
   });
   const { data: project } = useSWR<ProjectDetail>(clip ? `/projects/${clip.projectId}` : null);
   const { data: settings } = useSWR<{ ai: { aiMedia: boolean; semanticLLM: boolean }; aiMediaAvailable: boolean; llmProvider: string | null }>('/settings');
@@ -247,6 +248,7 @@ export default function ClipEditorPage() {
               </div>
             </CardContent>
           </Card>
+          <ThumbnailMaker key={clip.id} clip={clip} aiMedia={!!settings?.ai.aiMedia} onChange={(c) => void mutate(c, { revalidate: false })} />
           <SocialCopyCard clip={clip} llmEnabled={!!settings?.ai.semanticLLM} llmProvider={settings?.llmProvider ?? null} onChange={(c) => void mutate(c, { revalidate: false })} />
           <AiEffects clip={clip} d={d} set={set} enabled={!!settings?.ai.aiMedia} available={!!settings?.aiMediaAvailable} />
           <div className="grid grid-cols-2 gap-2">

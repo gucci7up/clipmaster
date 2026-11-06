@@ -3,7 +3,7 @@ import { ApiPropertyOptional, ApiTags } from '@nestjs/swagger';
 import { AspectRatio } from '@prisma/client';
 import { Type } from 'class-transformer';
 import { ArrayMaxSize, ArrayMinSize, IsArray, IsBoolean, IsEnum, IsIn, IsInt, IsNumber, IsObject, IsOptional, IsString, IsUUID, Max, MaxLength, Min, ValidateIf, ValidateNested } from 'class-validator';
-import type { SubtitleStyle } from '@clipmaster/shared';
+import type { SubtitleStyle, ThumbnailStyle } from '@clipmaster/shared';
 import { AuthUser, CurrentUser } from '../auth/auth.guard';
 import { ClipsService } from './clips.service';
 
@@ -45,6 +45,15 @@ class CreateClipDto {
   @Type(() => Number) @IsNumber() @Min(0) start: number;
   @Type(() => Number) @IsNumber() @Min(0) end: number;
   @IsOptional() @IsString() @MaxLength(200) title?: string;
+}
+
+class ThumbnailDto {
+  @Type(() => Number) @IsNumber() @Min(0) at: number;
+  @IsOptional() @IsEnum(AspectRatio) aspect?: AspectRatio;
+  @IsOptional() @IsIn(['frame', 'ai']) background?: 'frame' | 'ai';
+  @IsOptional() @ValidateIf((_o, v) => v !== null) @IsString() @MaxLength(600) prompt?: string | null;
+  @IsOptional() @IsString() @MaxLength(120) text?: string;
+  @IsOptional() @IsObject() style?: Partial<ThumbnailStyle>;
 }
 
 class ApplyStyleDto {
@@ -121,6 +130,12 @@ export class ClipsController {
   @Post('clips/:id/copy')
   generateCopy(@CurrentUser() user: AuthUser, @Param('id', ParseUUIDPipe) id: string) {
     return this.clips.generateCopy(user.id, id);
+  }
+
+  @HttpCode(200)
+  @Post('clips/:id/thumbnail')
+  thumbnail(@CurrentUser() user: AuthUser, @Param('id', ParseUUIDPipe) id: string, @Body() dto: ThumbnailDto) {
+    return this.clips.generateThumbnail(user.id, id, dto);
   }
 
   @Post('clips/:id/regenerate')

@@ -1,4 +1,4 @@
-import type { AiFeature, AiFeatureStatus, AspectRatio, ContentMode, ProviderId, SocialCopy, SubtitleStyle, Word } from '@clipmaster/shared';
+import type { AiFeature, AiFeatureStatus, AspectRatio, ContentMode, ProviderId, SocialCopy, SubtitleStyle, ThumbnailStyle, Word } from '@clipmaster/shared';
 
 export class ApiError extends Error {
   constructor(public status: number, message: string, public body?: unknown) {
@@ -80,7 +80,7 @@ export interface VideoSource {
 
 export interface Job {
   id: string;
-  type: 'IMPORT' | 'LIVE_CAPTURE' | 'ANALYZE' | 'RENDER' | 'CLEANUP' | 'COPY';
+  type: 'IMPORT' | 'LIVE_CAPTURE' | 'ANALYZE' | 'RENDER' | 'CLEANUP' | 'COPY' | 'THUMBNAIL';
   status: 'QUEUED' | 'RUNNING' | 'COMPLETED' | 'FAILED' | 'CANCELLED';
   stage: string | null;
   progress: number | null;
@@ -172,6 +172,12 @@ export interface Clip {
   socialCopy: (SocialCopy & { model: string; generatedAt: string }) | null;
   socialStatus: 'PENDING' | 'READY' | 'FAILED' | null;
   socialError: string | null;
+  /** Miniatura con texto: última configuración, imagen y estado. */
+  thumbConfig: { at: number; aspect: AspectRatio; background: 'frame' | 'ai'; prompt: string | null; text: string; style: ThumbnailStyle } | null;
+  thumbUrl: string | null;
+  thumbDownloadUrl: string | null;
+  thumbStatus: 'PENDING' | 'READY' | 'FAILED' | null;
+  thumbError: string | null;
   /** Clip combinado: tramos de la línea de tiempo del proyecto, en orden. */
   segments: { start: number; end: number }[] | null;
   wordsEdited: boolean;

@@ -208,7 +208,41 @@ class CopyJobData(_Model):
     language: Optional[str] = None
 
 
-JobData = Union[ImportJobData, LiveCaptureJobData, AnalyzeJobData, RenderJobData, CopyJobData]
+HEX = r"^#[0-9A-Fa-f]{6}$"
+
+
+class ThumbnailStyle(_Model):
+    font: str = Field(default="Bebas Neue", max_length=80)
+    textColor: str = Field(default="#FFFFFF", pattern=HEX)
+    strokeColor: str = Field(default="#000000", pattern=HEX)
+    look: Literal["outline", "box"] = "outline"
+    position: Literal["top", "center", "bottom"] = "bottom"
+    size: Literal["m", "l", "xl"] = "l"
+    uppercase: bool = True
+
+
+THUMBNAIL_SIZES: dict[str, tuple[int, int]] = {"VERTICAL": (1080, 1920), "HORIZONTAL": (1280, 720), "SQUARE": (1080, 1080)}
+
+
+class ThumbnailJobData(_Model):
+    kind: Literal["thumbnail"]
+    jobId: str
+    projectId: str
+    userId: str
+    clipId: str
+    sources: list[MediaSource]
+    at: float = Field(ge=0)
+    aspect: AspectRatio
+    background: Literal["frame", "ai"] = "frame"
+    prompt: Optional[str] = Field(default=None, max_length=600)
+    text: str = Field(default="", max_length=120)
+    style: ThumbnailStyle = Field(default_factory=ThumbnailStyle)
+    fonts: list[FontRef] = Field(default_factory=list)
+    reframe: Reframe = Field(default_factory=Reframe)
+    outputPrefix: str
+
+
+JobData = Union[ImportJobData, LiveCaptureJobData, AnalyzeJobData, RenderJobData, CopyJobData, ThumbnailJobData]
 
 _BY_KIND = {
     "import": ImportJobData,
@@ -216,6 +250,7 @@ _BY_KIND = {
     "analyze": AnalyzeJobData,
     "render": RenderJobData,
     "copy": CopyJobData,
+    "thumbnail": ThumbnailJobData,
 }
 
 

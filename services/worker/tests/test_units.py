@@ -26,7 +26,7 @@ SHARED = Path(__file__).resolve().parents[3] / "packages" / "shared"
 def test_contract_fixtures_parse():
     fixtures = json.loads((SHARED / "fixtures" / "jobs.json").read_text(encoding="utf-8"))
     kinds = {parse_job(f).kind for f in fixtures}
-    assert kinds == {"import", "live", "analyze", "render", "copy"}
+    assert kinds == {"import", "live", "analyze", "render", "copy", "thumbnail"}
 
 
 def test_unknown_job_kind_rejected():
